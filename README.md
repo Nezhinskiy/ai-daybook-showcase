@@ -118,6 +118,8 @@ an interview, it takes ten seconds.
 | Eval cases | **338** across 11 agents, run against **5** models |
 | Deterministic evaluators | **52** |
 | Design and plan documents | **212** |
+| **In production** | 527 messages · 581 agent runs · 48 active days · 4 sustained users |
+| **Measured end to end** | p50 **15.6 s** · p95 **67.9 s** from message to reply — [why, and what fixes it](docs/07-operations.md#what-it-actually-does-measured) |
 
 These are the output of one person **directing AI implementers**, not of one person typing.
 That is the point rather than a caveat: the numbers below the line — 52 deterministic

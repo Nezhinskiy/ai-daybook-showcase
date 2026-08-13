@@ -2,9 +2,48 @@
 
 [← back to the overview](../README.md)
 
-This runs in production for a small group of beta users, on a single droplet, deployed by a
-self-hosted runner. It is small infrastructure, which is exactly why the failure modes had
-to be designed rather than absorbed by redundancy.
+This runs in production on a single droplet, deployed by a self-hosted runner. It is small
+infrastructure, which is exactly why the failure modes had to be designed rather than
+absorbed by redundancy.
+
+## What it actually does, measured
+
+Read from the production database on 2026-08-13. Small numbers, stated precisely — a
+portfolio that says "a group of beta users" is hiding something, and the interesting claims
+here do not depend on scale.
+
+| | |
+|---|---|
+| Users | 13 registered · 12 have sent a message · **4 sustained** (5+ messages) |
+| Period | 2026-06-19 → 2026-08-12, **48 active days** |
+| Messages processed | **527** inbound · busiest day 37 |
+| Agent runs | **581** — food 322, episode analyzer 124, planning 39, the rest below 25 |
+| Records written | 311 meals · 256 activities · 210 episodes · 13 tasks |
+| Automated capture | **2,670 raw events → 210 episodes** — a 12.7:1 collapse, all evidence-backed |
+| Corrections | **222** `change_log` entries against 311 meals |
+| End-to-end reply latency | **p50 15.6 s · p90 51.4 s · p95 67.9 s** (n=370, inbound → reply sent) |
+
+Two of those deserve comment rather than celebration.
+
+**The latency is the honest weak point.** Fifteen seconds to a median reply is slow for
+something that feels like a chat. The cause is structural and known: the router is on the
+critical path for *every* message, so the floor is two sequential model calls plus tool
+execution before a word comes back. That is precisely the cost
+[deterministic evidence orchestration](09-roadmap.md#next) is designed to remove — the
+roadmap item exists because of this number, not the other way round.
+
+**The correction rate is the encouraging one.** 222 corrections against 311 meals means
+users routinely fix what the estimate got wrong, which is exactly the intended loop: log
+imprecisely and instantly, refine later. A low correction count would have meant the audit
+trail was decoration.
+
+## What breaks first at 100×
+
+One droplet, one Postgres, one worker pool. The binding constraint is not any of them — it
+is the **provider rate limit** on the subscription-backed decision path, which is shared
+across all users and does not scale by adding hardware. Past that, the next wall is the
+router being a mandatory serial hop, then Postgres connection ceilings under the concurrent
+per-route fan-out. Nothing here needs sharding before it needs a second provider lane.
 
 ## Deploy and rollback
 
@@ -54,12 +93,23 @@ The standing constraint above all of it: production user data is not a test fixt
 
 ## Cost control
 
-The interactive decision provider is subscription-backed rather than metered, with
-multi-provider failover behind it. Per-call cost and latency are attributed in Langfuse and
-accumulated into a per-user ledger, so "what does one user cost per month" is a query rather
-than an estimate. Eval runs against real models are the largest discretionary spend, which
-is why [chapter 06](06-quality.md) treats scoping a run before paying for it as part of the
-process rather than an afterthought.
+The interesting answer here is a design decision, not a dashboard.
+
+The interactive decision provider is **subscription-backed rather than metered**. The
+consequence is that the marginal LLM cost of one more message is zero, and the per-user cost
+curve is flat until the subscription's rate limit binds — which is why that limit, not
+money, is the scaling constraint named above. The per-user spend ledger exists and is
+**empty**, because the primary path emits nothing to meter. Only the metered lanes — the
+backup provider on failover, vision, and transcription — cost per call.
+
+That is a deliberate trade: predictable cost and no per-message billing surprise, paid for
+with a shared rate limit and a mandatory failover path. It is the right trade at four
+sustained users and would be the wrong one at four thousand, at which point the ledger stops
+being scaffolding and starts being load-bearing.
+
+Eval runs against real models are therefore the largest discretionary spend in the project,
+which is why [chapter 06](06-quality.md) treats scoping a run before paying for it as part
+of the process rather than an afterthought.
 
 ---
 
