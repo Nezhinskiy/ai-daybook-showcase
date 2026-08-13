@@ -80,6 +80,21 @@ Real-model runs are also expensive, so the process around them is explicit: scop
 before paying for it, and follow a cost-safe protocol for blocking runs. Reasoning from each
 run is captured alongside the result, so a regression can be read rather than guessed at.
 
+### A recorded run knows when it went stale
+
+Every result set stores the model, `k`, the threshold, the case count, the timestamp — and
+four content hashes: of the skill, the dataset, the **evaluation contract**, and the agent
+code. Freshness is therefore computable rather than remembered: a run is stale the moment
+any of those inputs moves, and the generated status page derives that instead of trusting a
+date.
+
+This matters more than it sounds. The failure mode it prevents is the one where a green
+result from six weeks ago is quoted as evidence about code that has since changed
+underneath it — which is how an eval suite turns into decoration. Hashing the *evaluation
+contract* separately from the dataset is the load-bearing part: it distinguishes "we added
+cases" from "we changed what passing means", and only the second invalidates a comparison
+between two runs.
+
 ## Migration-first schema
 
 `metadata.create_all()` is never used. **97 reviewed Alembic migrations**, each inspected
