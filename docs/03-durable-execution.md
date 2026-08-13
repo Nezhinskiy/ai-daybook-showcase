@@ -59,18 +59,39 @@ an out-of-bundle decision terminates rather than being repaired. A system that q
 recovers from a violated invariant teaches you nothing about how often the invariant is
 violated.
 
-## What this buys
+## When one route of four fails
 
-- A reminder scheduled for next month fires, and survives every deploy in between.
-- A crash mid-conversation resumes rather than losing the turn.
-- A duplicate delivery is a no-op instead of a duplicate meal.
-- An episode interpretation debounced over a burst of raw events runs once the burst
-  settles, without a cron job or a polling loop.
-- Failure is visible — to the user in the moment, and in Sentry afterwards.
+The fan-out is deliberately **not atomic**. The run, the omelette, the reminder and the
+inventory note are independent facts; losing three because the fourth failed is a worse
+outcome than a partial day. Each route commits on its own, and a failed one is terminal for
+itself alone.
 
-The cost is real: every workflow must be deterministic and replay-safe, contracts have to be
-complete at import time, and "just call the API here" is often not available. That
-constraint is what makes the guarantees hold.
+The user is told, per route, rather than left to discover it: a failed effect ends
+`failed_terminal`, the response projector takes its failed branch with no committed receipt,
+and the reply says plainly that nothing was written for that fragment. Silence would be the
+one unacceptable outcome, because a life log you cannot trust to have recorded something is
+worse than no life log.
+
+The harder failure is not a route that fails — it is a route that **succeeds wrongly**. A
+fragment routed to the wrong domain produces a perfectly valid record of the wrong kind, and
+nothing downstream can detect that, because every invariant it would violate belongs to the
+domain it was never sent to. There is no runtime mitigation. The defence is entirely
+upstream: the router carries by far the largest eval suite in the project — 92 of 338 cases
+— and a reply to a mis-routed record routes back to the right agent with full context, so a
+correction costs one message rather than a manual edit.
+
+That asymmetry is why the router is the only agent forbidden to solve anything: every
+capability it holds is a way for it to be wrong invisibly.
+
+## What this costs
+
+Every workflow must be deterministic and replay-safe. Contracts have to be complete at
+import time — a forward reference resolved lazily breaks replay, which is a failure that
+appears months later on a workflow you have forgotten. And "just call the API here" is often
+simply not available.
+
+That constraint is what makes the guarantees hold, and it is the trade this architecture
+exists to make.
 
 ---
 

@@ -13,16 +13,21 @@ is called at all.
 
 ## The pipeline
 
+The happy path is drawn in [the overview](../README.md#how-it-works). What matters here is
+where it *refuses*:
+
 ```mermaid
 flowchart TD
-    U["Telegram message<br/>(text · voice · photo)"] --> WF["Temporal<br/>MainMessageWorkflow"]
-    WF --> R["RouterAgent<br/>split into per-domain fragments"]
-    R --> I{{"Intent<br/>(domain-qualified, ≤1 route/domain)"}}
-    I --> A["Domain agent"]
-    A --> P["CapabilityPlan<br/>(pure-code expansion of the intent)"]
-    P --> RP["resolve_plan → ResolvedPlan<br/>typed actions · read tools · context · skills"]
-    RP --> E["EXECUTE<br/>single LLM decision, scoped to the plan<br/>fail-closed guard rejects out-of-bundle calls"]
-    E --> T["Typed tools<br/>validated · user_id-scoped · change_log"]
+    I{{"Intent"}} -->|supported| P["CapabilityPlan<br/>(pure code)"]
+    I -->|unsupported| F["Deterministic fallback<br/>no model call, no tokens spent"]
+    P --> E["EXECUTE — one LLM decision"]
+    E --> G{"capability_guard_rejection"}
+    G -->|"action outside bundle"| X["FAILED_TERMINAL<br/>no partial writes"]
+    G -->|"effect tool outside bundle"| X
+    G -->|"empty actions"| X
+    G -->|clean| T["Typed tools<br/>user_id forced · change_log"]
+    E -.->|"provider rate-limit / auth death"| B["Backup provider, one retry"]
+    B -.->|"no backup usable"| N["Deterministic no-LLM notice<br/>never silence"]
     T --> DB[("PostgreSQL")]
 ```
 
@@ -99,6 +104,29 @@ Three properties are worth naming:
    writes" is a structural fact rather than a rollback.
 3. **An unsupported intent never reaches a model.** It takes a deterministic, no-LLM
    fallback path and answers without spending a token.
+
+## What the model actually sees
+
+The plan decides what *may* happen. The prompt decides what the model knows while deciding.
+Four things are assembled, and each is bounded on purpose:
+
+- **Skill fragments** — the domain instructions for this intent specifically, not the whole
+  agent's manual. An intent that cannot create a recipe never sees the recipe rules.
+- **Context blocks** — typed, individually resolved, and **fail-soft**: a block that cannot
+  load leaves its section out rather than failing the run. A food decision gets recent
+  product usage; a correction gets the recent records that could plausibly be the target,
+  so "change that" resolves without a lookup round trip.
+- **Tool schemas** — only the tools in the bundle. This is why the guard is the second line
+  of defence rather than the first: an unlisted tool is not described to the model at all.
+- **Conversation history, bounded** — the router receives explicitly pinned targets plus ten
+  global turns; a domain agent receives the same targets plus ten turns it actually
+  participated in. Older turns are compacted into structured summaries built from immutable
+  revisions with explicit folded membership, so a slow or failed summary degrades into raw
+  overflow rather than a silent gap in what the model knows.
+
+The context blocks are rendered sequentially against one shared session rather than gathered
+concurrently — an attempt to parallelize them is the obvious optimization and it is the
+wrong one here, because they share the session that scopes them.
 
 ## Why typed objects rather than strings
 

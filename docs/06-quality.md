@@ -35,8 +35,13 @@ and tool boundary — raw dicts are never passed down and re-parsed.
 ## The eval corpus
 
 **338 cases across 11 agents**, exercised against **5 models** — `claude-sonnet-5`,
-`claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-5.6-terra`, and `gpt-5.5` — with **45**
-recorded result sets.
+`claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-5.6-terra`, and `gpt-5.5`.
+
+That is 55 possible agent×model combinations; **45** are recorded. The gaps are deliberate:
+the cheapest model was only ever scoped on the simplest agent, and the two agents added most
+recently have not been run against every provider. The blocking gate exercises the
+production model, and the others exist to answer "would a cheaper or a different model hold
+this contract" rather than to fill a grid.
 
 | Agent | Cases | | Agent | Cases |
 |---|---|---|---|---|

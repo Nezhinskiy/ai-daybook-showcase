@@ -54,11 +54,9 @@ import time, because a forward reference resolved lazily breaks replay.
 
 ## Scale
 
-**97 reviewed migrations** and counting, across meals, nutrition, products, recipes and
-prepared batches, activities and workouts, tasks, events, reminders, purchases, inventory,
-raw events and episodes, screen sessions and rules, Wi-Fi places, conversation turns and
-summaries, agent runs and memories, journal entries with their emotions and themes, CBT
-records, Keeper notes, tags, and the change log over most of it.
+**97 reviewed migrations** across fourteen domains. The schema's shape is set by two rules
+rather than by the domain count: every row carries `user_id` directly, and nothing is
+overwritten.
 
 ---
 

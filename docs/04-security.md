@@ -18,6 +18,29 @@ events, and inventory — correlations no per-domain tool API could express.
 description of a security incident. It is safe here because it is guarded on three
 independent layers, and defeating one buys nothing.
 
+## Layer 0 — the model's inputs are untrusted too
+
+Before the SQL question, the prior one: product names from OpenFoodFacts, window titles from
+screen-time events, transcribed voice, and text recognized in photos all reach a model that
+can call write tools. None of that text was authored by the user.
+
+There is **no prompt-injection filter**, and adding one is not on the roadmap. The bet is
+structural instead: the capability bundle is computed from the user's own intent *before*
+any of that text is assembled into the prompt. Injected instructions can therefore, at
+worst, cause a wrong call **within** a plan the user's own message already authorized —
+never a call outside it, never a tool that was not attached, and never a write touching
+another user's rows, because `user_id` is forced from the request scope rather than accepted
+from the model.
+
+That bounds the blast radius; it does not eliminate the attack. A crafted product name could
+still steer a meal record to the wrong value inside the plan, and nothing here would catch
+it. The honest position is that a filter would be theatre against a determined attacker
+while the bundle is the thing actually doing the work — and that the residual risk is
+mis-valued records, not escalation.
+
+The three layers below cover the sharpest edge of that surface, where generated text becomes
+executable.
+
 ## Layer 1 — parse, don't pattern-match
 
 Every generated query is parsed into an AST with [`sqlglot`](https://github.com/tobymao/sqlglot)
@@ -101,12 +124,20 @@ writes do not meet.
 
 ## Where the guard came from
 
-The narrow-`SSLError` habit visible elsewhere in this codebase applies here too: an early
-version of the function allow-list matched too broadly, and the fix was to narrow it to
-exactly the canonical names that are safe, not to add another regex on top. Guards that grow
-by accretion stop being guards. Each rule above is there because a specific bypass was
-either found or reasoned through — and the rejection messages name the rule, so a failure is
-diagnosable rather than mysterious.
+An early version of the function allow-list matched on the *node type* rather than the
+canonical function name. `sqlglot` models some SQL functions as typed nodes and others as
+anonymous ones, so a function could pass or fail depending on how the parser happened to
+represent it — which meant the allow-list did not describe the set of functions it was
+supposed to describe.
+
+The fix was to canonicalize the name first and check that, covering both representations,
+rather than to add a second pattern alongside the first. That is the rule the whole module
+follows: a guard that grows by accretion has stopped being a guard, because nobody can any
+longer say what it admits.
+
+Rejection messages name the rule that fired, so a refusal is diagnosable rather than
+mysterious — which matters because the person debugging it is usually looking at a query a
+model wrote and they have never seen before.
 
 ---
 

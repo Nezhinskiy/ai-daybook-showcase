@@ -13,7 +13,7 @@ that makes the next decision cheaper than the last.
 Every non-trivial change moves through the same pipeline, and each stage has a different
 job:
 
-1. **Spec** — what we are building and *why this shape*, with the alternatives that were
+1. **Spec** — what is being built and *why this shape*, with the alternatives that were
    rejected and the reason. Approved before anything is planned.
 2. **Plan** — the implementation, decomposed into independently testable tasks with their
    test cycles written out.

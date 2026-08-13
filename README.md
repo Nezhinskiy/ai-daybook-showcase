@@ -2,31 +2,41 @@
 
 # ai-daybook
 
-**A life-logging system for people whose executive function is the bottleneck —
-built on eleven long-lived AI agents, orchestrated by Temporal.**
+**A production life-logging system: eleven long-lived LLM agents on Temporal, where the
+model gets exactly one decision per request — inside a boundary computed in advance by
+ordinary code.**
 
-**[▶ Try the live demo](https://ai-daybook.cc/app/demo.html)** · best on a phone
+**[▶ Live demo](https://ai-daybook.cc/app/demo.html)** · synthetic data, best on a phone
 
 </div>
 
 ---
 
-> **This is a case study, not an open-source release.** The implementation repository is
-> private. The excerpts below are illustrative — enough to show how the system is built,
-> not enough to rebuild it. [Rights](#rights).
+**The three things worth your next thirty seconds:**
+
+- **One LLM decision, pre-scoped.** An intent expands into a `CapabilityPlan` by pure code.
+  An out-of-bundle tool call is `FAILED_TERMINAL` with no partial writes — checked against
+  the *plan*, so "no partial writes" is structural rather than a rollback.
+  → [chapter 02](docs/02-agent-architecture.md)
+- **An LLM writes free-form SQL against production, safely.** `sqlglot` AST validation, a
+  role holding no write grant, and Postgres row-level security. Defeating any one of the
+  three buys nothing. → [chapter 04](docs/04-security.md)
+- **338 eval cases, 52 deterministic evaluators, no judge model, threshold 1.0, no
+  retries.** Every number here ships with the command that produced it.
+  → [chapter 06](docs/06-quality.md)
+
+Built and operated by one person. What that means for the numbers below is
+[chapter 08](docs/08-engineering-process.md).
 
 ---
 
-## The problem
+## Who it is for, and why that shaped the architecture
 
 Every conventional self-tracking tool charges, as its price of entry, exactly the capacity
-that is scarce. Habit trackers demand streaks. Food diaries demand precise quantities. Task
-managers demand that the plan already exists.
-
-For people with ADHD or autism — the users this is built for — that is not a minor
-friction. It is the disability itself, presented as a signup form. The tools do not fail
-for lack of features. They fail because using them requires the thing you came for help
-with.
+that is scarce: habit trackers demand streaks, food diaries demand precise quantities, task
+managers demand that the plan already exists. For people with ADHD or autism — the users
+this is built for — that is not a minor friction. It is the disability itself, presented as
+a signup form.
 
 ## The product
 
@@ -61,8 +71,8 @@ that punishes absence is designed against its own users.
 
 ## Product decisions become system constraints
 
-This is the part worth reading. Each value above translates into a specific architectural
-commitment — and those commitments are what the rest of this repository is about.
+Each value above translates into a specific architectural commitment — and those
+commitments are what the rest of this repository is about.
 
 | Product value | System constraint |
 |---|---|
@@ -95,8 +105,8 @@ Unsupported intents never reach a model at all — they take a deterministic fal
 ## By the numbers
 
 Measured at one pinned commit. Every figure ships with the command that produced it, in
-[chapter 06](docs/06-quality.md#how-these-were-counted), so you can reproduce any of them
-rather than take them on trust.
+[chapter 06](docs/06-quality.md#how-these-were-counted) — so if you want one re-run live in
+an interview, it takes ten seconds.
 
 | | |
 |---|---|
@@ -109,20 +119,24 @@ rather than take them on trust.
 | Deterministic evaluators | **52** |
 | Design and plan documents | **212** |
 
-The ratios are the claim, not the raw counts. A test suite 1.7× the size of production, an
-eval corpus of 338 cases with 52 purpose-built evaluators, and a five-model matrix are what
-make broad autonomous agents safe to ship.
+These are the output of one person **directing AI implementers**, not of one person typing.
+That is the point rather than a caveat: the numbers below the line — 52 deterministic
+evaluators, a merge gate at threshold 1.0 with no retries, `mypy --strict` over the tests
+themselves — are the apparatus that makes the numbers above the line trustworthy. How that
+direction works is [chapter 08](docs/08-engineering-process.md).
 
 ## Read on
+
+If you read two, read **02** and **06**.
 
 | | |
 |---|---|
 | [01 · Product](docs/01-product.md) | Audience, use cases, and the UX decisions that carry it |
-| [02 · Agent architecture](docs/02-agent-architecture.md) | The capability model and the fail-closed boundary |
+| **[02 · Agent architecture](docs/02-agent-architecture.md)** | The capability model and the fail-closed boundary |
 | [03 · Durable execution](docs/03-durable-execution.md) | Temporal, idempotency, provider failover |
 | [04 · Security](docs/04-security.md) | Guarded SQL, row-level security, typed effects |
 | [05 · Data model](docs/05-data-model.md) | The lifelog schema, audit trail, derived episodes |
-| [06 · Quality](docs/06-quality.md) | The eval gate, the test tiers, the counting rules |
+| **[06 · Quality](docs/06-quality.md)** | The eval gate, the test tiers, the counting rules |
 | [07 · Operations](docs/07-operations.md) | Deploy, rollback, observability, cost ledger |
 | [08 · Engineering process](docs/08-engineering-process.md) | How the work is directed and verified |
 | [09 · Roadmap](docs/09-roadmap.md) | What is designed, planned, and deliberately not built yet |

@@ -31,8 +31,8 @@ auditable today; it is simply not yet drawn.
   and memory coexist in one navigation is the real question, and it needs a design pass.
 - **Journal and CBT read views** — *Backlog*, after notes. Capture stays chat-only by
   design: silent capture is a product decision, not a missing screen.
-- **Surfacing `food_nutrition` and recipes** — *Backlog.* Known gap, reproduced in
-  production: a nutrition record exists while the Memory screen does not display it.
+- **Read-surface coverage for nutrition and recipes** — *Backlog.* Records that exist and
+  are queryable but are not yet drawn anywhere.
 
 ## Designed
 
@@ -64,7 +64,6 @@ auditable today; it is simply not yet drawn.
 - Charting and correlation analytics.
 - Code-defined alerting — Sentry captures today, it does not alert
   ([chapter 07](07-operations.md)).
-- A public demo prefix and mobile gate, plus a cache-control fix on the demo entry.
 
 ## Next
 

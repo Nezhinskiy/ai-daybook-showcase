@@ -31,19 +31,8 @@ The design brief that follows from this is narrow and unusually strict:
 
 ## The interface you actually use
 
-Telegram. You text it like a friend, and the routing happens behind the message.
-
-```text
-you ▸ morning run, 5k. then an omelette and coffee. remind me tomorrow
-      at 9 to book the dentist — oh, and I'm out of whey protein
-
-router ▸ 4 fragments · 4 domains · dispatched concurrently
-
-   🏃 ActivityAgent   run · 5 km · morning            → activities
-   🍳 FoodAgent       omelette + coffee ≈ 430 kcal    → meals (estimated, no questions)
-   ⏰ PlanningAgent   "book dentist" tomorrow 09:00   → durable Temporal timer
-   📦 InventoryAgent  whey protein → running low      → inventory
-```
+Telegram. You text it like a friend, and one message fans out across domains behind the
+scenes — see [the worked example](../README.md#the-product).
 
 Voice messages are transcribed. Meal photos are recognized. Barcodes are decoded and looked
 up against OpenFoodFacts. None of that requires choosing a mode first.
@@ -59,6 +48,9 @@ is where accumulated data becomes legible.
 | **Today.** One timeline across every domain, with the calorie ring and macros above it. Gaps are labelled rather than hidden — "4 h 49 min free" is information, not empty space. The medication reminder carries an inline **✓ Taken** that decrements the linked inventory item. | **Plans.** Tasks, calendar events, reminders, and planned purchases in one agenda. A recurring reminder shows its series window rather than pretending to be a single event. |
 | ![Inventory](../images/inventory.png) | ![Memory](../images/memory.png) |
 | **Inventory.** Possessions, supplies, and medicines with quantities that write back when a dose is approved from the timeline. | **Memory.** What the agents have learned and retained about you, per agent — readable and deletable, not a black box. |
+
+<sub>Every screenshot uses the shipped demo fixture set — synthetic data, generated
+deterministically. No real record appears anywhere in this repository.</sub>
 
 ## The decisions worth stealing
 
