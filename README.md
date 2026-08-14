@@ -2,45 +2,19 @@
 
 # ai-daybook
 
-**A production life-logging system: eleven long-lived LLM agents on Temporal, where the
-model gets exactly one decision per request — inside a boundary computed in advance by
-ordinary code.**
+**A production life-logging system: eleven long-lived LLM agents on Temporal, where the model
+gets exactly one decision per request — inside a boundary computed in advance by ordinary
+code.**
 
-**[▶ Live demo](https://ai-daybook.cc/app/demo.html)** · synthetic data, best on a phone
+[**▶ Live demo**](https://ai-daybook.cc/app/demo.html) · [**Evidence**](docs/EVIDENCE.md) · [**The code**](code/)
+
+<sub>Demo runs on synthetic data and is built for a phone.</sub>
 
 </div>
 
 ---
 
-**The three things worth your next thirty seconds:**
-
-- **One LLM decision, pre-scoped.** An intent expands into a `CapabilityPlan` by pure code.
-  An out-of-bundle tool call is `FAILED_TERMINAL` with no partial writes — checked against
-  the *plan*, so "no partial writes" is structural rather than a rollback.
-  → [chapter 02](docs/02-agent-architecture.md)
-- **An LLM writes free-form SQL against production, safely.** `sqlglot` AST validation, a
-  role holding no write grant, and Postgres row-level security. Defeating any one of the
-  three buys nothing. → [chapter 04](docs/04-security.md)
-- **338 eval cases, 52 deterministic evaluators, no judge model, threshold 1.0, no
-  retries.** Every number here ships with the command that produced it.
-  → [chapter 06](docs/06-quality.md)
-
-Built and operated by one person. What that means for the numbers below is
-[chapter 08](docs/08-engineering-process.md).
-
----
-
-## Who it is for, and why that shaped the architecture
-
-Every conventional self-tracking tool charges, as its price of entry, exactly the capacity
-that is scarce: habit trackers demand streaks, food diaries demand precise quantities, task
-managers demand that the plan already exists. For people with ADHD or autism — the users
-this is built for — that is not a minor friction. It is the disability itself, presented as
-a signup form.
-
-## The product
-
-You text it the way you'd text a friend:
+You text it the way you'd text a friend, and one message can carry four unrelated things:
 
 ```text
 you ▸ morning run, 5k. then an omelette and coffee. remind me tomorrow
@@ -54,86 +28,48 @@ router ▸ 4 fragments · 4 domains · dispatched concurrently
    📦 InventoryAgent  whey protein → running low      → inventory
 ```
 
-Four typed, audited, user-scoped database writes. No forms, no follow-up interrogation.
+Four typed, audited, user-scoped database writes. No forms, no follow-up interrogation. It is
+built for people with ADHD or autism, which is the reason the architecture looks the way it
+does — [chapter 01](docs/01-product.md).
 
-Three values carry the product:
+## Three claims, each with its proof
 
-1. **Zero-friction capture.** One line, mixing domains freely, by voice or photo. A thought
-   that has to wait for a form is already gone.
-2. **Accumulate everything, ask for nothing.** Screen time, Wi-Fi places, and workouts
-   arrive automatically and join what you typed. The value grows without the effort growing.
-3. **The analysis is the agent's job.** Cross-domain correlation and resurfacing at the
-   moment of relevance, so noticing does not depend on remembering to look.
+| Claim | Why it holds | See it run |
+|---|---|---|
+| **One LLM decision per request, pre-scoped.** An intent expands into a `CapabilityPlan` by pure code; an out-of-bundle call is `FAILED_TERMINAL` with no partial writes — checked against the *plan*, so "no partial writes" is structural rather than a rollback. | [chapter 02](docs/02-agent-architecture.md) | [the guard, exercised](docs/EVIDENCE.md#3-the-guard-exercised) |
+| **An LLM writes free-form SQL against production, safely.** `sqlglot` AST validation, a role holding no write grant, and Postgres row-level security. Defeating any one of the three buys nothing. | [chapter 04](docs/04-security.md) | [the validator, exercised](docs/EVIDENCE.md#5-the-sql-validator-exercised) |
+| **339 eval cases, 57 deterministic evaluators, no judge model, threshold 1.0, no retries.** A flaky case is a defect to root-cause, never something to retry past. | [chapter 06](docs/06-quality.md) | [a defect the evals could not see](docs/EVIDENCE.md#6-a-production-defect-the-eval-suite-could-not-see) |
 
-And one constraint that outranks all three: **no streaks, no guilt, gaps are normal.** The
-working criterion is that the system must be worth opening after a three-week gap. Anything
-that punishes absence is designed against its own users.
+## Verify it yourself
 
-## Product decisions become system constraints
+Portfolio numbers are worth what their provenance is worth, so every figure here ships with
+the command that produced it, run at one pinned commit:
 
-Each value above translates into a specific architectural commitment — and those
-commitments are what the rest of this repository is about.
+```console
+$ python -m pytest -m "not integration" -n 8 -q
+7817 passed, 3 skipped in 71.62s (0:01:11)
 
-| Product value | System constraint |
-|---|---|
-| Zero-friction capture | The router splits one mixed message into per-domain fragments and estimates common inputs without asking. |
-| Accumulate everything | Durable ingest, with idempotency at every external boundary and every durable effect. |
-| Analysis is the agent's job | Free-form cross-domain SQL, parsed with `sqlglot` and executed under a read-only role with row-level security. |
-| Worth opening after a gap | The database is the source of truth; the chat is a persisted mirror, never a queue. |
-
-## How it works
-
-The core idea: the LLM gets **exactly one** decision per request, inside a pre-computed,
-fail-closed boundary. Everything around that decision is deterministic code.
-
-```mermaid
-flowchart TD
-    U["Telegram message<br/>(text · voice · photo)"] --> WF["Temporal<br/>MainMessageWorkflow"]
-    WF --> R["RouterAgent<br/>split into per-domain fragments"]
-    R --> I{{"Intent<br/>(domain-qualified, ≤1 route/domain)"}}
-    I --> A["Domain agent"]
-    A --> P["CapabilityPlan<br/>(pure-code expansion of the intent)"]
-    P --> RP["resolve_plan → ResolvedPlan<br/>typed actions · read tools · context · skills"]
-    RP --> E["EXECUTE<br/>single LLM decision, scoped to the plan<br/>fail-closed guard rejects out-of-bundle calls"]
-    E --> T["Typed tools<br/>validated · user_id-scoped · change_log"]
-    T --> DB[("PostgreSQL")]
+$ git ls-files tests | grep '\.py$' | tr '\n' '\0' \
+    | xargs -0 grep -hoE '^[[:space:]]*(async )?def test_' | wc -l
+    7683
 ```
 
-An out-of-bundle decision is rejected outright: `FAILED_TERMINAL`, no partial writes.
-Unsupported intents never reach a model at all — they take a deterministic fallback.
+[**docs/EVIDENCE.md**](docs/EVIDENCE.md) carries the rest as raw output: every count with its
+command, one request traced from intent to written row, the guard and the SQL validator
+rejecting real input, three defects unabridged, and what the system actually does in
+production.
 
-## By the numbers
-
-Measured at one pinned commit. Every figure ships with the command that produced it, in
-[chapter 06](docs/06-quality.md#how-these-were-counted) — so if you want one re-run live in
-an interview, it takes ten seconds.
-
-| | |
-|---|---|
-| Agents | **11** — ten domain agents plus a router |
-| Durable Temporal workflows | **20** |
-| Alembic migrations | **97** |
-| Tests | **8,307** — 7,599 Python, 708 frontend |
-| Test-to-production code | **1.71×** — 282k lines of tests against 165k of Python |
-| Eval cases | **338** across 11 agents, run against **5** models |
-| Deterministic evaluators | **52** |
-| Design and plan documents | **212** |
-| **In production** | 527 messages · 581 agent runs · 48 active days · 4 sustained users |
-| **Measured end to end** | p50 **15.6 s** · p95 **67.9 s** from message to reply — [why, and what fixes it](docs/07-operations.md#what-it-actually-does-measured) |
-
-These are the output of one person **directing AI implementers**, not of one person typing.
-That is the point rather than a caveat: the numbers below the line — 52 deterministic
-evaluators, a merge gate at threshold 1.0 with no retries, `mypy --strict` over the tests
-themselves — are the apparatus that makes the numbers above the line trustworthy. How that
-direction works is [chapter 08](docs/08-engineering-process.md).
+[**code/**](code/) is the capability kernel itself — 1,069 lines of source and 1,268 of tests,
+copied verbatim, readable in twenty minutes.
 
 ## Read on
 
-If you read two, read **02** and **06**.
+If you read two, read **02** and **06**. If you read one thing, read
+[the evidence](docs/EVIDENCE.md).
 
 | | |
 |---|---|
-| [01 · Product](docs/01-product.md) | Audience, use cases, and the UX decisions that carry it |
+| [01 · Product](docs/01-product.md) | Audience, use cases, and the UX decisions that carry them |
 | **[02 · Agent architecture](docs/02-agent-architecture.md)** | The capability model and the fail-closed boundary |
 | [03 · Durable execution](docs/03-durable-execution.md) | Temporal, idempotency, provider failover |
 | [04 · Security](docs/04-security.md) | Guarded SQL, row-level security, typed effects |
@@ -141,9 +77,11 @@ If you read two, read **02** and **06**.
 | **[06 · Quality](docs/06-quality.md)** | The eval gate, the test tiers, the counting rules |
 | [07 · Operations](docs/07-operations.md) | Deploy, rollback, observability, cost ledger |
 | [08 · Engineering process](docs/08-engineering-process.md) | How the work is directed and verified |
-| [09 · Roadmap](docs/09-roadmap.md) | What is designed, planned, and deliberately not built yet |
+| [09 · Governance](docs/09-governance.md) | The rules the codebase enforces on itself |
+| [10 · Roadmap](docs/10-roadmap.md) | What is shipped, and what deliberately is not |
 
-## Stack
+<details>
+<summary><b>Stack</b></summary>
 
 | Layer | Choice |
 |---|---|
@@ -161,13 +99,15 @@ If you read two, read **02** and **06**.
 | Observability | Sentry (including `gen_ai` spans), Langfuse for cost and latency |
 | Infra | Docker Compose, GHCR images, self-hosted deploy runner |
 
+</details>
+
 ## Rights
 
-This is a case study, not an open-source release. The implementation repository is private;
-the excerpts here are illustrative and are not a distribution. All rights reserved.
-© 2026 Mikhail Nezhinsky.
+A case study. The implementation repository is private; the files under [`code/`](code/) are
+published for reading and no license to use them is granted. All rights reserved.
+© 2026 Mikhail Nezhinsky · [mikhail.nezhinsky@gmail.com](mailto:mikhail.nezhinsky@gmail.com)
 
 ---
 
-<sub>Snapshot of commit `2c683ad5`, 2026-08-13. The private repository has moved on since;
+<sub>Snapshot of commit `6ad9968c`, 2026-08-14. The private repository has moved on since;
 figures here are not updated continuously.</sub>

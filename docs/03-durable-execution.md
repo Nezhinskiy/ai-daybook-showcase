@@ -35,8 +35,7 @@ Telegram redelivers. Networks retry. Deploys interrupt.
 
 Every external ingress deduplicates by natural key, and every durable effect boundary
 carries an idempotency key. A duplicate webhook resolves to the same persisted row rather
-than a second one. This is enforced at the boundary rather than checked by the caller,
-because a boundary that trusts its callers is not a boundary.
+than a second one. This is enforced at the boundary rather than checked by the caller.
 
 Every run, tool call, message, and outbound result is persisted. Telegram is a **mirror,
 not a queue** — the work chat shows what happened, and deleting it changes nothing, because
@@ -68,15 +67,14 @@ itself alone.
 
 The user is told, per route, rather than left to discover it: a failed effect ends
 `failed_terminal`, the response projector takes its failed branch with no committed receipt,
-and the reply says plainly that nothing was written for that fragment. Silence would be the
-one unacceptable outcome, because a life log you cannot trust to have recorded something is
-worse than no life log.
+and the reply says plainly that nothing was written for that fragment. Silence is the one
+unacceptable outcome.
 
 The harder failure is not a route that fails — it is a route that **succeeds wrongly**. A
 fragment routed to the wrong domain produces a perfectly valid record of the wrong kind, and
 nothing downstream can detect that, because every invariant it would violate belongs to the
 domain it was never sent to. There is no runtime mitigation. The defence is entirely
-upstream: the router carries by far the largest eval suite in the project — 92 of 338 cases
+upstream: the router carries by far the largest eval suite in the project — 92 of 339 cases
 — and a reply to a mis-routed record routes back to the right agent with full context, so a
 correction costs one message rather than a manual edit.
 
@@ -90,8 +88,8 @@ import time — a forward reference resolved lazily breaks replay, which is a fa
 appears months later on a workflow you have forgotten. And "just call the API here" is often
 simply not available.
 
-That constraint is what makes the guarantees hold, and it is the trade this architecture
-exists to make.
+That is the trade. Hand-written lifecycle code is cheaper to write and is the part that
+fails at 2am.
 
 ---
 

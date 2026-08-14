@@ -8,34 +8,44 @@ absorbed by redundancy.
 
 ## What it actually does, measured
 
-Read from the production database on 2026-08-13. Small numbers, stated precisely — a
+Read from the production database on 2026-08-14. Small numbers, stated precisely — a
 portfolio that says "a group of beta users" is hiding something, and the interesting claims
-here do not depend on scale.
+here do not depend on scale. Queries and raw output: [evidence
+§8](EVIDENCE.md#8-production).
 
 | | |
 |---|---|
-| Users | 13 registered · 12 have sent a message · **4 sustained** (5+ messages) |
-| Period | 2026-06-19 → 2026-08-12, **48 active days** |
-| Messages processed | **527** inbound · busiest day 37 |
-| Agent runs | **581** — food 322, episode analyzer 124, planning 39, the rest below 25 |
-| Records written | 311 meals · 256 activities · 210 episodes · 13 tasks |
+| Users | 14 registered · 13 have sent a message · **4 sustained** (≥5 active days) |
+| Period | 2026-06-19 → 2026-08-13, **49 active days** |
+| Messages processed | **531** inbound |
+| Agent runs | **586** — 541 succeeded, 29 needs-user, 16 terminal |
+| Effect-tool calls | **830** |
+| Records written | 312 meals · 258 activities · 210 episodes · 13 tasks |
 | Automated capture | **2,670 raw events → 210 episodes** — a 12.7:1 collapse, all evidence-backed |
-| Corrections | **222** `change_log` entries against 311 meals |
-| End-to-end reply latency | **p50 15.6 s · p90 51.4 s · p95 67.9 s** (n=370, inbound → reply sent) |
+| Corrections | **223** `change_log` entries against 312 meals |
+| End-to-end reply latency | **p50 15.9 s · p90 56.4 s · p95 79.6 s** (n=377, inbound → reply sent) |
+| Capability-guard rejections | **0** |
 
-Two of those deserve comment rather than celebration.
+Three of those deserve comment rather than celebration.
 
 **The latency is the honest weak point.** Fifteen seconds to a median reply is slow for
 something that feels like a chat. The cause is structural and known: the router is on the
 critical path for *every* message, so the floor is two sequential model calls plus tool
 execution before a word comes back. That is precisely the cost
-[deterministic evidence orchestration](09-roadmap.md#next) is designed to remove — the
+[deterministic evidence orchestration](10-roadmap.md#direction) is designed to remove — the
 roadmap item exists because of this number, not the other way round.
 
-**The correction rate is the encouraging one.** 222 corrections against 311 meals means
+**The correction rate is the encouraging one.** 223 corrections against 312 meals means
 users routinely fix what the estimate got wrong, which is exactly the intended loop: log
 imprecisely and instantly, refine later. A low correction count would have meant the audit
 trail was decoration.
+
+**Zero guard rejections is the number to be careful about.** The capability guard has never
+fired in 586 production runs. That is what the design predicts — it is a backstop against a
+decision no correct model should produce — but it also means production traffic is not what
+validates it. Its correctness rests on unit tests and a 56-entry snapshot corpus over every
+intent's expanded bundle, which is why those are named in
+[chapter 06](06-quality.md) rather than left implicit.
 
 ## What breaks first at 100×
 

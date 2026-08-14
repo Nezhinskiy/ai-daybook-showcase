@@ -9,10 +9,24 @@ pass while the product quietly gets worse.
 Two layers answer that: a large deterministic suite that never calls a model, and an eval
 corpus that does.
 
-## The deterministic suite
+## The numbers on this page
 
-**8,307 tests** — 7,599 Python and 708 frontend. Test code outweighs production Python
-**1.71×** (282k lines against 165k).
+Measured at commit `6ad9968c`, 2026-08-14. Every command is in
+[how these were counted](#how-these-were-counted); every output is on the
+[evidence page](EVIDENCE.md#1-the-counts-and-the-commands-that-produced-them).
+
+| | |
+|---|---|
+| Tests | **8,391** — 7,683 Python test functions, 708 frontend |
+| Default lane, actually run | **7,817 passed, 3 skipped, 72 s** (parametrization expands functions into items) |
+| Test-to-production code | **1.72×** — 285k lines of tests against 165k of Python |
+| Eval cases | **339** across 11 agents |
+| Deterministic evaluators | **57** |
+| Durable Temporal workflows | **20** |
+| Alembic migrations | **97** |
+| Confirmed defects on record | **95** |
+
+## The deterministic suite
 
 The rule is that tests protect *behavior*, not shape. A tool test asserts the persisted row,
 the `change_log` entry, and the user scoping — not the shape of the object the tool returned
@@ -34,19 +48,19 @@ and tool boundary — raw dicts are never passed down and re-parsed.
 
 ## The eval corpus
 
-**338 cases across 11 agents**, exercised against **5 models** — `claude-sonnet-5`,
-`claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-5.6-terra`, and `gpt-5.5`.
+**339 cases across 11 agents**, exercised against models from three providers —
+`claude-sonnet-5`, `claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-5.6-terra`, and `gpt-5.5`.
 
-That is 55 possible agent×model combinations; **45** are recorded. The gaps are deliberate:
-the cheapest model was only ever scoped on the simplest agent, and the two agents added most
-recently have not been run against every provider. The blocking gate exercises the
-production model, and the others exist to answer "would a cheaper or a different model hold
-this contract" rather than to fill a grid.
+That is 55 agent×model combinations; **40 are recorded and 15 have never been run**. The
+gaps are deliberate and are printed as `never` rather than left blank: the cheapest model was
+only ever scoped on the simplest agent, and the most recently added agents have not been run
+against every provider. The blocking gate exercises the production model; the rest exist to
+answer "would a cheaper or different model hold this contract", not to fill a grid.
 
 | Agent | Cases | | Agent | Cases |
 |---|---|---|---|---|
 | router | 92 | | journal | 24 |
-| food | 55 | | inventory | 21 |
+| food | 56 | | inventory | 21 |
 | planning | 34 | | faq | 14 |
 | query | 29 | | profile | 9 |
 | activity | 26 | | raw_events | 9 |
@@ -58,7 +72,7 @@ record of the wrong kind.
 
 ### Deterministic evaluators, not a judge model
 
-**52 purpose-built evaluators** score those cases — `ExpectedToolCalled`,
+**57 purpose-built evaluators** score those cases — `ExpectedToolCalled`,
 `ExactPlannedTools`, `OrderedPlannedTools`, `ToolCallCount`, `ToolListFieldExactGroups`,
 `ToolStatusAbsent`, `ToolCallWindowsDisjoint`, `ReadToolCalled`, and so on.
 
@@ -80,6 +94,14 @@ retries** — before the change can merge.
 No retries is the point. A gate that retries measures the best of N attempts, which is not
 what a user gets. A flaky case is treated as a defect and root-caused: to the dataset, to
 the prompt, to the code, or to a provider transient identified as such. It is never masked.
+
+What that costs, honestly: an eval run failing on a provider transient blocks a change that
+is fine. The policy for that is a written procedure — probe the failing case in isolation at
+higher `k`, and only call it a transient when the isolated run is clean — not a retry flag.
+The [evidence page](EVIDENCE.md#6-a-production-defect-the-eval-suite-could-not-see) carries a
+case where the same discipline caught an earlier flake attribution that had been *wrong*: a
+failure recorded as a host-login race turned out, under a baseline probe, to be a real 3/5
+prompt ambiguity.
 
 Real-model runs are also expensive, so the process around them is explicit: scope the run
 before paying for it, and follow a cost-safe protocol for blocking runs. Reasoning from each
@@ -109,16 +131,19 @@ on real data is not a downgrade.
 
 ## How these were counted
 
-Every figure in this repository comes from a command run at one pinned commit, `2c683ad5`:
+Every figure in this repository comes from a command run at one pinned commit, `6ad9968c`.
+The commands and their raw output are on the
+[evidence page](EVIDENCE.md#1-the-counts-and-the-commands-that-produced-them):
 
 | Metric | Value | Command |
 |---|---|---|
-| Python test functions | 7,599 | `git ls-files tests \| grep '\.py$' \| tr '\n' '\0' \| xargs -0 grep -hoE '^[[:space:]]*(async )?def test_' \| wc -l` |
+| Python test functions | 7,683 | `git ls-files tests \| grep '\.py$' \| tr '\n' '\0' \| xargs -0 grep -hoE '^[[:space:]]*(async )?def test_' \| wc -l` |
 | Frontend test cases | 708 | `grep -rhoE "^\s*(it\|test)\(" frontend/src \| wc -l` |
-| Deterministic evaluators | 52 | `grep -cE "^class [A-Za-z]+\(Evaluator\)" src/app/evals/evaluators.py` |
-| Eval cases | 338 | `grep -hcE "^  - " src/app/agents/skills/*/evals/dataset.yaml \| awk '{s+=$1} END {print s}'` |
+| Deterministic evaluators | 57 | `grep -cE "^class [A-Za-z]+\(Evaluator\)" src/app/evals/evaluators.py` |
+| Eval cases | 339 | `grep -hcE "^  - " src/app/agents/skills/*/evals/dataset.yaml \| awk '{s+=$1} END {print s}'` |
 | Durable workflows | 20 | `grep -rh '@workflow.defn' src/app/workflows/ \| wc -l` |
 | Migrations | 97 | `ls -1 alembic/versions/*.py \| wc -l` |
+| Confirmed defects | 95 | `grep -cE '^## BR-' docs/bug-reports.md` |
 
 Two rules, each of which has already produced a wrong number in this project once:
 
@@ -127,7 +152,7 @@ Two rules, each of which has already produced a wrong number in this project onc
 - Measure at a pinned commit, never in a worktree. Uncommitted and branch-local files move a
   headline figure.
 
-A number without its command is a boast. A number with one is evidence.
+A number without its command is a boast.
 
 ---
 

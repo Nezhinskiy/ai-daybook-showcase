@@ -5,7 +5,7 @@
 This is a solo-built system. That makes the process question sharper rather than softer:
 with no reviewer to catch you, the discipline has to be structural, or it does not exist.
 
-**212 design and plan documents** sit behind the code. Not as ceremony — as the mechanism
+**213 design and plan documents** sit behind the code. Not as ceremony — as the mechanism
 that makes the next decision cheaper than the last.
 
 ## Design before plan before code
@@ -80,6 +80,54 @@ verification apparatus is strong enough that speed does not cost correctness —
 same apparatus a team would need, built by one person because there was no one else to
 catch the mistakes.
 
+## Three decisions where the judgment was the deliverable
+
+The obvious question about a repository built this way is which parts are actually the
+author's. The honest answer is that the volume is not, and the boundaries are — so here are
+three places where the implementation was ready and the right call was to overrule it. Each
+is verifiable in the code.
+
+**1. The SQL function allow-list was keyed on the wrong thing.** The obvious implementation —
+read each function node's canonical name through sqlglot's `sql_name()`, check membership —
+collapses every unrecognized function in existence onto a single key, because that is how the
+library models a name it does not know. The allow-list would have passed every test written
+against the functions I had remembered to name while admitting `pg_read_file`. Six lines to
+fix; the finding is the whole value, and it came from reading the library's object model
+rather than its documentation.
+[Chapter 04 carries it in full](04-security.md#the-bug-that-made-the-allow-list-real).
+
+**2. Refusing to parallelize the context blocks.** Context assembly is the visible latency
+cost on every request: six blocks, several of them DB-backed, awaited one after another.
+Wrapping them in `asyncio.gather` is the obvious optimization and it is wrong here, because
+production and the eval harness both open **one** `AsyncSession` and pass that same session
+into every block — and SQLAlchemy's `AsyncSession` forbids concurrent operations. Doing it
+"safely" means a session per block, which multiplies connections per turn in a system that
+has already exhausted its connection slots once (see
+[BR-021](EVIDENCE.md#br-021--an-orphaned-event-loop-leaked-one-postgres-connection-per-agent-run)).
+
+The correct lever was not concurrency but scope: context blocks are declared per capability,
+so the fix for wasted reads is to remove them from the bundle. `KeeperNotesCapability` was
+split into a note-actions capability and a separate context capability, so an inventory intent
+keeps the note actions reachable and drops the recent-notes and tag reads entirely. Same
+latency win, no new failure mode.
+
+**3. Not building a prompt-injection filter.** Product names from OpenFoodFacts, window titles
+from screen-time events, transcribed voice, and text recognized in photos all reach a model
+that can call write tools, and none of it was authored by the user. The expected move is a
+filter. There is none, and there will not be one.
+
+The reasoning is in [chapter 04](04-security.md#layer-0--the-models-inputs-are-untrusted-too):
+the capability bundle is computed from the user's own intent *before* any untrusted text is
+assembled, so injected instructions can at worst cause a wrong call **inside** a plan the user
+already authorized. A filter would add a bypassable component and a false sense of coverage
+on top of the thing already doing the work. The residual risk — a crafted product name
+steering a value inside an authorized plan — is stated rather than papered over.
+
+The common shape of all three: the implementation was available and plausible in each case,
+and what decided it was reading one layer below the abstraction — how sqlglot models an
+unknown function, what a shared `AsyncSession` actually forbids, where the trust boundary
+really is.
+
 ---
 
-[← operations](07-operations.md) · [next: roadmap →](09-roadmap.md)
+[← operations](07-operations.md) · [next: governance →](09-governance.md)

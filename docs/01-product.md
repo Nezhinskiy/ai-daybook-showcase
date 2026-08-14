@@ -32,7 +32,7 @@ The design brief that follows from this is narrow and unusually strict:
 ## The interface you actually use
 
 Telegram. You text it like a friend, and one message fans out across domains behind the
-scenes — see [the worked example](../README.md#the-product).
+scenes — see [the worked example](../README.md).
 
 Voice messages are transcribed. Meal photos are recognized. Barcodes are decoded and looked
 up against OpenFoodFacts. None of that requires choosing a mode first.
@@ -52,7 +52,7 @@ is where accumulated data becomes legible.
 <sub>Every screenshot uses the shipped demo fixture set — synthetic data, generated
 deterministically. No real record appears anywhere in this repository.</sub>
 
-## The decisions worth stealing
+## Four decisions that shaped the rest
 
 **The day starts at 05:00, not midnight.** A meal logged at 01:00 belongs to the day that
 just ended, because that is how people actually think about "today". The boundary follows
@@ -80,7 +80,7 @@ contract. An archivist that chats is an archivist you stop writing to.
 Keeper notes, journal entries, and CBT records are fully shipped on the capture side —
 typed effect tools, tags, corrections, the note→task handoff, and nine read-only SQL views
 over them — and have no Mini App screen. Capture was deliberately sequenced ahead of
-presentation. Notes are next; see [chapter 09](09-roadmap.md).
+presentation. Notes are next; see [chapter 10](10-roadmap.md).
 
 For journal capture specifically, staying chat-only is a product decision rather than a
 missing screen.

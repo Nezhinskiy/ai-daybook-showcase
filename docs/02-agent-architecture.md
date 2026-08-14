@@ -13,16 +13,20 @@ is called at all.
 
 ## The pipeline
 
-The happy path is drawn in [the overview](../README.md#how-it-works). What matters here is
-where it *refuses*:
+Solid edges are the happy path. What matters is where it *refuses*:
 
 ```mermaid
 flowchart TD
-    I{{"Intent"}} -->|supported| P["CapabilityPlan<br/>(pure code)"]
+    U["Telegram message<br/>(text · voice · photo)"] --> WF["Temporal<br/>MainMessageWorkflow"]
+    WF --> R["RouterAgent<br/>split into per-domain fragments"]
+    R --> I{{"Intent<br/>domain-qualified, ≤1 route per domain"}}
+    I -->|supported| P["CapabilityPlan<br/>(pure code, no model)"]
     I -->|unsupported| F["Deterministic fallback<br/>no model call, no tokens spent"]
-    P --> E["EXECUTE — one LLM decision"]
+    P --> S{"resolved_plan_scope_mismatch<br/>re-derive and compare"}
+    S -->|"plan widened or drifted"| X["FAILED_TERMINAL<br/>no partial writes"]
+    S -->|matches| E["EXECUTE — one LLM decision"]
     E --> G{"capability_guard_rejection"}
-    G -->|"action outside bundle"| X["FAILED_TERMINAL<br/>no partial writes"]
+    G -->|"action outside bundle"| X
     G -->|"effect tool outside bundle"| X
     G -->|"empty actions"| X
     G -->|clean| T["Typed tools<br/>user_id forced · change_log"]
@@ -51,12 +55,54 @@ class CapabilityPlan(BaseModel):
 
 <sub>`src/app/agents/capability/plan.py`</sub>
 
-That is the entire contract. `resolve_plan` then rehydrates it into a `ResolvedPlan` of real
-typed objects — `Action`, `ReadToolSpec`, `ContextBlockSpec`, skill fragments — and only
-those objects are wired into the model call.
+Fifteen lines, seven lists of strings. That is the entire contract between the code and the
+model, and its shape is the reason the rest works: a plan that is serializable is also
+diffable, loggable, snapshot-testable, and comparable field by field. `resolve_plan` then
+rehydrates it into a `ResolvedPlan` of real typed objects — `Action`, `ReadToolSpec`,
+`ContextBlockSpec`, skill fragments — and only those objects are wired into the model call.
 
 **One LLM decision.** EXECUTE happens once, scoped to that plan. It is the only call in the
 system that can authorize a write.
+
+## The layer between the plan and the guard
+
+Plan-then-guard has a gap in it: the guard checks the decision against *whatever plan it was
+handed*. A plan that arrived widened — from a caller, a cache, a refactor, a
+deserialization — passes a guard that is doing its job perfectly.
+
+So the plan is checked too. `resolved_plan_scope_mismatch` re-derives the canonical plan from
+the intent alone and compares it against the one in hand, field by field:
+
+```python
+def resolved_plan_scope_mismatch(actual: ResolvedPlan, expected: ResolvedPlan) -> str | None:
+    if actual.domain != expected.domain:
+        return f"plan_domain:{actual.domain}:expected_domain:{expected.domain}"
+    if actual.intent != expected.intent: ...
+    if actual_skill_fragments != expected_skill_fragments: ...
+    if actual.skill != expected.skill: ...                    # the composed prompt itself
+    if actual.action_kinds != expected.action_kinds: ...
+    if actual.allowed_effect_tools != expected.allowed_effect_tools: ...
+    if actual_read_tools != expected_read_tools: ...
+    if actual_context_blocks != expected_context_blocks: ...
+    # Last resort: catches plan drift not explained by any specific check above
+    # (e.g. reordered serialized lists or a new CapabilityPlan field).
+    if actual.plan.model_dump(mode="json") != expected.plan.model_dump(mode="json"):
+        return "plan_serialized_mismatch"
+    return None
+```
+
+<sub>[`code/src/app/agents/capability/resolve.py`](../code/src/app/agents/capability/resolve.py)
+· abridged; every check returns a distinct diagnosable string</sub>
+
+Each specific check exists to produce a *readable* failure. The closing `model_dump`
+comparison exists because a guard that only knows the failure modes you anticipated has an
+expiry date.
+
+That last clause is not hypothetical. Smuggling one extra tool into a serialized plan's
+`allowed_effect_tools` is caught by **`plan_serialized_mismatch` and by nothing else** — the
+resolved effect-tool set is derived from the resolved actions, so the specific check compares
+two identical sets while the underlying plans differ. [The evidence page runs
+it](EVIDENCE.md#4-the-plan-scope-check-exercised).
 
 ## The guard
 
@@ -88,11 +134,17 @@ def capability_guard_rejection(
     return None
 ```
 
-<sub>`src/app/agents/common/guard.py`</sub>
+<sub>[`code/src/app/agents/common/guard.py`](../code/src/app/agents/common/guard.py) · the
+whole file, 36 lines including imports</sub>
 
 A rejection is terminal: `FAILED_TERMINAL`, **no partial writes**. Not a retry, not a
 repair, not a "let me try that again with a stricter prompt". The run ends and the user gets
-a deterministic message.
+a deterministic message. [Watch it reject real
+input](EVIDENCE.md#3-the-guard-exercised).
+
+Two barriers, not one. An action kind can be legitimate while the tool call it carries is
+not, so both are checked — and `UNIVERSAL_ACTION_KINDS` (today just `ask_user`) is a property
+read off the `Action` object, not a special-cased string inside the guard.
 
 Three properties are worth naming:
 

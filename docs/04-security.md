@@ -85,8 +85,8 @@ canonical name against an analytical allow-list, covering both `sqlglot`'s typed
 nodes and anonymous ones, so a function cannot slip through by virtue of how the parser
 happens to model it.
 
-Anything the parser cannot fully resolve is rejected. **Ambiguity is a rejection, not a
-pass** — that is what makes it a guard rather than a filter.
+Anything the parser cannot fully resolve is rejected: **ambiguity is a rejection, not a
+pass**.
 
 ## Layer 2 — the role physically cannot write
 
@@ -122,22 +122,38 @@ The consequence: the analytical surface and the mutation surface share no code. 
 what the QueryAgent can read can never widen what any agent can write, because reads and
 writes do not meet.
 
-## Where the guard came from
+## The bug that made the allow-list real
 
-An early version of the function allow-list matched on the *node type* rather than the
-canonical function name. `sqlglot` models some SQL functions as typed nodes and others as
-anonymous ones, so a function could pass or fail depending on how the parser happened to
-represent it — which meant the allow-list did not describe the set of functions it was
-supposed to describe.
+An early version of the function allow-list read each function node's canonical name through
+sqlglot's `sql_name()` and checked membership. That is the obvious implementation and it does
+not work, for a reason visible only in the library's model.
 
-The fix was to canonicalize the name first and check that, covering both representations,
-rather than to add a second pattern alongside the first. That is the rule the whole module
-follows: a guard that grows by accretion has stopped being a guard, because nobody can any
-longer say what it admits.
+sqlglot represents a function it recognizes as a typed node — `exp.Count`, `exp.Cast` — whose
+`sql_name()` returns the real name. A function it does **not** recognize becomes
+`exp.Anonymous`, carrying the raw name in `.this`, and `Anonymous.sql_name()` returns the
+literal string `"ANONYMOUS"`. So a single-branch allow-list maps every unrecognized function
+in existence onto one key. `pg_read_file`, `version`, anything at all — all of them compare
+equal, and all of them are admitted the moment that key appears in the set.
 
-Rejection messages name the rule that fired, so a refusal is diagnosable rather than
-mysterious — which matters because the person debugging it is usually looking at a query a
-model wrote and they have never seen before.
+```python
+def _function_name(func: exp.Func) -> str:
+    if isinstance(func, exp.Anonymous):
+        return func.this.lower() if isinstance(func.this, str) else ""
+    return func.sql_name().lower()
+```
+
+<sub>[`code/src/app/db/effects/readonly_sql.py:242`](../code/src/app/db/effects/readonly_sql.py)</sub>
+
+The failure mode is the dangerous kind: an allow-list that has silently stopped
+discriminating still passes every test written against the functions you remembered to name.
+Canonicalization also runs the other way — `version()` canonicalizes to `current_version` and
+`date_trunc` to `timestamp_trunc` — so the allow-list holds canonical forms and the rejection
+message names the canonical form, not what was typed. [See it
+reject](EVIDENCE.md#5-the-sql-validator-exercised).
+
+Rejection messages name the rule that fired, so a refusal is diagnosable — which matters
+because the person debugging it is looking at a query a model wrote and they have never seen
+before.
 
 ---
 
