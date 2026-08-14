@@ -122,6 +122,13 @@ contract* separately from the dataset is the load-bearing part: it distinguishes
 cases" from "we changed what passing means", and only the second invalidates a comparison
 between two runs.
 
+**Which is why no pass rate appears in this repository.** The obvious portfolio move is to
+quote a headline number — "0.97 across the matrix". The recorded runs are snapshots taken on
+different dates, at different `k`, against different dataset versions, and 15 of the 55
+agent×model cells have never been run at all. Averaging them would produce a figure that is
+arithmetically real and evidentially meaningless. The apparatus that computes staleness is
+worth more here than any number it currently holds, so the apparatus is what is described.
+
 ## Migration-first schema
 
 `metadata.create_all()` is never used. **97 reviewed Alembic migrations**, each inspected

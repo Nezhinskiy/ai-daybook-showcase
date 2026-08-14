@@ -43,11 +43,29 @@ itself produces contradictory status, and contradictory status is worse than non
 
 ## Defects get written down before they get fixed
 
-Bug reports carry the symptom, the production evidence that localized it, the exact seam at
-fault, the commit that introduced it, and the fix commit by SHA. Rejected findings are
-recorded too, with the reasoning — so the same non-bug is not re-investigated in six months.
+Ninety-five entries. Each carries the symptom, the production evidence that localized it, the
+exact seam at fault, and the fix commit by SHA — [three of them are reproduced in
+full](EVIDENCE.md#7-three-defects-unabridged).
 
-The habit this enforces: **reproduce before you act.** A finding from a review, a static
+Three rules govern the file, and each was written after the absence of it cost something:
+
+- **An entry is filed at the moment a finding is deferred**, not batched at the end of a run.
+  Two genuine hot-path performance regressions once lived only in a gitignored task log and
+  would have evaporated with the worktree that wrote it; a final review caught them by
+  accident, not by process.
+- **Rejected findings stay, with the reasoning.** A verified non-bug that is deleted gets
+  re-investigated in six months, and deleting it would also renumber everything after it —
+  identifiers have to stay stable for the evidence to be citable.
+- **A cited covering test must exist — verify the path before saving the entry.** An earlier
+  entry cited `tests/evals/test_reasoning_log.py`, a file that has never existed in this
+  repository. An unverifiable citation reads as "covered" when it is not, which is worse than
+  citing nothing.
+
+That third rule is the one worth transplanting. It is a process that noticed its own failure
+mode and closed it, and the failure mode — a document asserting coverage that does not exist —
+is exactly what a bug tracker is for.
+
+The habit all three enforce: **reproduce before you act.** A finding from a review, a static
 analyzer, or another agent is a hypothesis until it is reproduced. Acting on unverified
 findings is how a codebase accumulates changes that fix nothing.
 

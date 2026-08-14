@@ -127,6 +127,17 @@ Note what is **not** in that list. No `log_meal`. No `run_readonly_sql`. No `sea
 The model deciding this request cannot see them, is not offered them, and — per §3 — cannot
 reach them if it names them anyway.
 
+**After the decision.** EXECUTE returns typed actions; each action's adapter turns them into
+`PlannedToolCall(tool_name, input)` — which is what §3 checks. A surviving call dispatches to
+the typed effect tool, which validates its input against a Pydantic contract, **forces
+`user_id` from the request scope rather than accepting it from the model**, writes, and
+records a `change_log` entry on any update. 830 such calls have executed in production.
+
+One real decision payload appears in [§8](#8-production) — captured from the trace that
+became BR-027. Full inbound-to-row captures are not published here, because a real trace
+carries a real person's message, and no production record content appears anywhere in this
+repository.
+
 ---
 
 ## 3. The guard, exercised
