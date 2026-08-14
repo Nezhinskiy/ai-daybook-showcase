@@ -40,10 +40,11 @@ does — [chapter 01](docs/01-product.md).
 | **An LLM writes free-form SQL against production, safely.** `sqlglot` AST validation, a role holding no write grant, and Postgres row-level security. Defeating any one of the three buys nothing. | [chapter 04](docs/04-security.md) | [the validator, exercised](docs/EVIDENCE.md#5-the-sql-validator-exercised) |
 | **339 eval cases, 57 deterministic evaluators, no judge model, threshold 1.0, no retries.** A flaky case is a defect to root-cause, never something to retry past. | [chapter 06](docs/06-quality.md) | [a defect the evals could not see](docs/EVIDENCE.md#6-a-production-defect-the-eval-suite-could-not-see) |
 
-## Verify it yourself
+## Provenance
 
-Portfolio numbers are worth what their provenance is worth, so every figure here ships with
-the command that produced it, run at one pinned commit:
+The implementation repository is private, so you cannot run these yourself. What you can do
+is see which command produced each figure, at one pinned commit, and hold the two against each
+other:
 
 ```console
 $ python -m pytest -m "not integration" -n 8 -q
@@ -53,6 +54,9 @@ $ git ls-files tests | grep '\.py$' | tr '\n' '\0' \
     | xargs -0 grep -hoE '^[[:space:]]*(async )?def test_' | wc -l
     7683
 ```
+
+<sub>Two different things: 7,683 test *functions* in tracked files, 7,817 test *items* pytest
+collects after parametrization in the lane that excludes the Postgres and Temporal tiers.</sub>
 
 [**docs/EVIDENCE.md**](docs/EVIDENCE.md) carries the rest as raw output: every count with its
 command, one request traced from intent to written row, the guard and the SQL validator

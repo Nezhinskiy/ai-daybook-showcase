@@ -18,7 +18,7 @@ here do not depend on scale. Queries and raw output: [evidence
 | Users | 14 registered · 13 have sent a message · **4 sustained** (≥5 active days) |
 | Period | 2026-06-19 → 2026-08-13, **49 active days** |
 | Messages processed | **531** inbound |
-| Agent runs | **586** — 541 succeeded, 29 needs-user, 16 terminal (9 provider, 6 guard, 1 backfill) |
+| Agent runs | **586** — 541 succeeded, 29 needs-user, 16 terminal (6 guard, 1 decision timeout, 1 read-tool cap, 1 backfill, 7 unattributed) |
 | Effect-tool calls | **830** |
 | Records written | 312 meals · 258 activities · 210 episodes · 13 tasks |
 | Automated capture | **2,670 raw events → 210 episodes** — a 12.7:1 collapse, all evidence-backed |

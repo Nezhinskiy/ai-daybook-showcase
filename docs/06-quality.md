@@ -48,8 +48,10 @@ and tool boundary — raw dicts are never passed down and re-parsed.
 
 ## The eval corpus
 
-**339 cases across 11 agents**, exercised against models from three providers —
-`claude-sonnet-5`, `claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-5.6-terra`, and `gpt-5.5`.
+**339 cases across 11 agents**, exercised against five models — `claude-sonnet-5`,
+`claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-5.6-terra`, and `gpt-5.5` — reached through three
+access lanes (`claude_cli`, `openrouter`, `codex_app_server`), which is what "provider" means
+everywhere below.
 
 That is 55 agent×model combinations; **40 are recorded and 15 have never been run**. The
 gaps are deliberate and are printed as `never` rather than left blank: the cheapest model was
@@ -110,24 +112,33 @@ run is captured alongside the result, so a regression can be read rather than gu
 ### A recorded run knows when it went stale
 
 Every result set stores the model, `k`, the threshold, the case count, the timestamp — and
-four content hashes: of the skill, the dataset, the **evaluation contract**, and the agent
-code. Freshness is therefore computable rather than remembered: a run is stale the moment
-any of those inputs moves, and the generated status page derives that instead of trusting a
-date.
+content hashes of the skill, the dataset, the **evaluation contract**, and an execution
+profile, plus an optional agent-code fingerprint. Freshness is computed from those rather than
+remembered from a date.
 
-This matters more than it sounds. The failure mode it prevents is the one where a green
-result from six weeks ago is quoted as evidence about code that has since changed
-underneath it. Hashing the *evaluation contract* separately from the dataset is the
-load-bearing part: it distinguishes "we added
-cases" from "we changed what passing means", and only the second invalidates a comparison
-between two runs.
+Two different questions are answered by different subsets, and conflating them would
+overstate what the status page proves:
 
-**Which is why no pass rate appears in this repository.** The obvious portfolio move is to
-quote a headline number — "0.97 across the matrix". The recorded runs are snapshots taken on
-different dates, at different `k`, against different dataset versions, and 15 of the 55
-agent×model cells have never been run at all. Averaging them would produce a figure that is
-arithmetically real and evidentially meaningless. The apparatus that computes staleness is
-worth more here than any number it currently holds, so the apparatus is what is described.
+| Question | What is compared |
+|---|---|
+| Is the generated status page's verdict `fresh` or `stale`? | skill content hash + dataset hash |
+| May a stored result be **reused as gate evidence**? | skill version, skill content hash, dataset hash, and evaluation-contract hash — and the pass rate is recomputed from the recorded cases rather than read off the file |
+
+The second is the stricter gate, and the recompute is the part that matters: a stored
+`pass_rate` field is a claim, and the eligibility check declines to trust it.
+
+Hashing the *evaluation contract* separately from the dataset is the load-bearing idea. It
+distinguishes "we added cases" from "we changed what passing means", and only the second
+invalidates a comparison between two runs. The skill hash is not naive either — it folds in
+shared common fragments, and for the FAQ agent the shipped RAG corpus bytes, because a corpus
+edit changes behavior while leaving every prompt file untouched.
+
+**No averaged pass rate appears in this repository**, for the reason the mechanism above makes
+precise: the recorded runs are snapshots at different dates, different `k`, and different
+dataset versions, and 15 of the 55 agent×model cells have never been run. A matrix average
+would be arithmetically real and evidentially meaningless. One current, hash-verified run is
+worth more than that average, and [the evidence page publishes
+it](EVIDENCE.md#9-the-current-strict-gate).
 
 ## Migration-first schema
 

@@ -71,6 +71,12 @@ analyzer, or another agent is a hypothesis until it is reproduced.
 Much of this system was built with AI assistance. The interesting part is not that it was —
 it is what had to be true for that to produce something trustworthy.
 
+Start with the number a reader will otherwise compute themselves and frame however they
+like: **3,673 commits and 255 merged pull requests in 89 days**, one author. Roughly forty
+commits a day. That rate is not evidence of anything on its own — it is the reason every
+mechanism in [chapter 09](09-governance.md) exists, because a boundary nobody checks erodes
+in weeks at that speed, and a review pass by the person writing the change is not a check.
+
 Every guard in [chapter 04](04-security.md) and every gate in [chapter 06](06-quality.md) is
 a mechanism for not trusting an assertion — including the model's, and including mine. The
 eval gate does not care who wrote the change. The capability guard does not care how

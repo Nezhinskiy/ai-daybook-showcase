@@ -2,12 +2,15 @@
 
 [← back to the overview](../README.md)
 
-A codebase that one person maintains for a year and a half decays in a specific way: not
-through bad code, but through erosion of the boundaries that made the code good. Nobody
-notices, because there is no one to notice.
+First commit 2026-05-16, latest 2026-08-14. **3,673 commits and 255 merged pull requests in
+89 days** — around 41 commits and 3 merged PRs a day, by one person.
+
+That rate is the reason this chapter exists. A codebase decays through erosion of the
+boundaries that made the code good rather than through bad code, and at forty commits a day
+that erosion takes weeks, not years. There is also no second person to notice it happening.
 
 So the boundaries are written down as contracts, and the contracts are enforced by machines.
-**3,673 commits** have gone through them.
+Every one of those 3,673 commits went through them.
 
 ## Every package declares what it must not know
 
@@ -147,9 +150,10 @@ you nothing the code does not already.
 ## What this is actually worth
 
 Three documents, one script, five ADRs, and a rule about the second occurrence of a defect
-class. What it buys is that a change made eighteen months in still has to answer the same
-questions as a change made in week one, and that the answers are checked by something other
-than the memory of the person making them.
+class. What it has already bought, over 3,673 commits in 89 days, is that commit 3,673 had to
+answer the same questions as commit 12 — and that the answers were checked by something other
+than the memory of the person making them, which at that rate is not a resource you can
+spend.
 
 ---
 

@@ -12,7 +12,8 @@ Measured at commit `6ad9968c`, 2026-08-14, on a clean tree.
 [the SQL validator, exercised](#5-the-sql-validator-exercised) ·
 [a defect the evals could not see](#6-a-production-defect-the-eval-suite-could-not-see) ·
 [three defects unabridged](#7-three-defects-unabridged) ·
-[production](#8-production)
+[production](#8-production) ·
+[the current strict gate](#9-the-current-strict-gate)
 
 ---
 
@@ -86,7 +87,7 @@ The user forwards a meeting invite. The router assigns it
 single EXECUTE decision — the bundle below is computed by `expand_intent`, which is pure code.
 
 ```console
-$ python -c "..."   # expand_intent(Intent('calendar_event_log'), has_media=False)
+expand_intent(Intent("calendar_event_log"), has_media=False).model_dump(mode="json")
 {
   "domain": "planning_agent",
   "intent": "calendar_event_log",
@@ -383,7 +384,7 @@ Read from the production database on **2026-08-14**; window 2026-06-19 → 2026-
 | Registered users / who ever messaged / sustained (≥5 active days) | 14 / 13 / **4** |
 | Active days | 49 |
 | Inbound messages | 531 |
-| Agent runs | 586 — 541 succeeded, 29 needs-user, 16 terminal (9 provider, 6 guard, 1 backfilled orphan) |
+| Agent runs | 586 — 541 succeeded, 29 needs-user, 16 terminal (6 guard, 1 decision timeout, 1 read-tool cap, 1 backfilled orphan, 7 with no error recorded) |
 | Effect-tool calls | 830 |
 | Records written | 312 meals · 258 activities · 210 episodes · 223 audited corrections |
 | Automated raw events ingested | 2,670 |
@@ -402,18 +403,29 @@ for cost, not latency, and a mixed message pays for a router decision plus one d
 domain, sequentially. [Chapter 07](07-operations.md#what-it-actually-does-measured) carries
 what would fix it and why it has not been prioritized for a logging tool.
 
-**How often the guard fires**, split by which barrier:
+**How often the guard fires**, split by which barrier. This groups on the structured fields
+rather than searching the JSON as text, so the zero below is "no row carries that reason", not
+"the substring did not appear":
 
 ```console
-$ select count(*) from agent_runs where output::text ilike '%disallowed_%';
-0
-$ select count(*) from agent_runs where output::text ilike '%capability_guard%';
-6
+$ select coalesce(output->>'error','(none)'), coalesce(output->>'reason','(none)'), count(*)
+    from agent_runs group by 1,2 order by 3 desc;
+
+(none)                    | (none)                                       | 578
+capability_guard_rejected | empty_actions                                |   6
+decision_timeout          | turn exceeded its 180s budget                |   1
+tool_rounds_exceeded      | read-tool invocation cap exceeded during turn |   1
 ```
 
-The **scope** barriers — `disallowed_action`, `disallowed_effect_tool` — have never fired.
-Zero out of 586. The **empty-plan** barrier fired six times, all `reason: "empty_actions"`,
-five on FoodAgent and one on ActivityAgent, and none since 2026-07-15.
+Every `capability_guard_rejected` row carries `empty_actions`. `disallowed_action` and
+`disallowed_effect_tool` — the two **scope** barriers — appear on no row at all: zero out of
+586. The **empty-plan** barrier fired six times, five on FoodAgent and one on ActivityAgent,
+none since 2026-07-15.
+
+What that query does and does not establish: it is exhaustive over `agent_runs`, so no
+rejection *recorded by an agent run* is missed. It cannot speak for a decision that never
+reached `record_agent_run` — BR-032 was exactly that failure mode, and its one backfilled
+orphan is in the terminal counts above.
 
 That last date is not a coincidence. The sixth rejection, run `7ffed4e1`, **is** the trace
 recorded as BR-027. The user answered FoodAgent's own clarifying question with a
@@ -450,3 +462,68 @@ The uncovered part is named because a reader would otherwise assume it was cover
 ---
 
 [← back to the overview](../README.md)
+
+---
+
+## 9. The current strict gate
+
+[Chapter 06](06-quality.md#a-recorded-run-knows-when-it-went-stale) argues that averaging
+snapshots taken on different dates against different dataset versions is meaningless. That
+argument only earns its keep if a single current run is published instead. Here it is.
+
+**Ten agents, `--k 5`, `--threshold 1.0`, pass rate 1.00** — 283 cases, **1,415 case-runs**,
+run 2026-08-01 and still reported `fresh` by the hash mechanism at the pinned commit two weeks
+later.
+
+| Agent | Cases | k | Threshold | Pass | Skill |
+|---|---|---|---|---|---|
+| router | 92 | 5 | 1.0 | 1.00 | 1.25.2 |
+| planning | 34 | 5 | 1.0 | 1.00 | 1.8.12 |
+| query | 29 | 5 | 1.0 | 1.00 | 1.6.1 |
+| activity | 26 | 5 | 1.0 | 1.00 | 2.12.4 |
+| raw_events_analyzer | 25 | 5 | 1.0 | 1.00 | 1.13.0 |
+| journal | 24 | 5 | 1.0 | 1.00 | 1.4.0 |
+| inventory | 21 | 5 | 1.0 | 1.00 | 1.4.2 |
+| faq | 14 | 5 | 1.0 | 1.00 | 1.2.0 |
+| profile | 9 | 5 | 1.0 | 1.00 | 1.2.0 |
+| raw_events | 9 | 5 | 1.0 | 1.00 | 1.1.0 |
+
+One artifact, whole, so the freshness claim is checkable rather than asserted:
+
+```json
+{ "agent": "query_agent", "skill_version": "1.6.1",
+  "content_hash":             "sha256:5b28f03ca83b017107b44ab172ac2ad332e11a87cc9f33eccf49cef98ad797a",
+  "dataset_hash":             "sha256:3a808cbc6b9137208ad2fb497148fb0c09cde37b56236687d9fd1dac62709e0",
+  "evaluation_contract_hash": "sha256:9976d974f61e006d12c6872a8177403943bbd49afe8b409810206889116f7f6",
+  "execution_profile_digest": "sha256:e45d900fe72915ce74265c5ccde87bab6b11dfdb215581813b9496e5f2978cb",
+  "case_count": 29, "model": "codex_app_server:gpt-5.6-terra", "k": 5,
+  "threshold": 1.0, "ran_at": "2026-08-01T11:19:59Z", "pass_rate": 1.0 }
+```
+
+### Three things this does not say
+
+**It is not the production provider.** This gate ran on `codex_app_server:gpt-5.6-terra`, the
+secondary lane, chosen because real-model runs are the project's largest discretionary spend
+and the subscription-backed production lane is rate-limited rather than metered. On the
+production lane — `claude_cli:claude-sonnet-5` — the current runs are **k=1 screening at
+threshold 0.00**, not a strict gate:
+
+| Agent | Pass (k=1 screen, 2026-08-06) | | Agent | Pass |
+|---|---|---|---|---|
+| faq · inventory · journal · profile · query · raw_events · raw_events_analyzer | 1.00 | | router | 0.99 |
+| planning | 0.97 | | activity | 0.92 |
+
+A k=1 screen is a different instrument from a k=5 gate at threshold 1.0 and is labelled as
+one. Reporting the 1.00 figures without that distinction would be the exact move
+[chapter 06](06-quality.md) refuses.
+
+**FoodAgent is excluded, and it is the hardest agent.** Its skill is at 1.21.1; the last run
+on any provider tested 1.15.4 or earlier, so every FoodAgent cell reads
+`stale: prompt+dataset` and none of its 56 cases are in the 283 above. Its most recent
+production-lane screen scored **0.89 at k=1** against a skill version that no longer exists.
+Two of its cases are on record as not reliably green at k=1 — BR-073, open.
+
+**Fresh is a claim about inputs, not about the world.** The verdict compares the skill and
+dataset hashes; a provider that has changed its model behind a stable name will not move
+either. That is a real limit of hash-based freshness and the reason the gate re-runs on agent
+change rather than on a schedule.
