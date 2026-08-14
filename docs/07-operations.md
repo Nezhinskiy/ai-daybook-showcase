@@ -18,13 +18,13 @@ here do not depend on scale. Queries and raw output: [evidence
 | Users | 14 registered · 13 have sent a message · **4 sustained** (≥5 active days) |
 | Period | 2026-06-19 → 2026-08-13, **49 active days** |
 | Messages processed | **531** inbound |
-| Agent runs | **586** — 541 succeeded, 29 needs-user, 16 terminal |
+| Agent runs | **586** — 541 succeeded, 29 needs-user, 16 terminal (9 provider, 6 guard, 1 backfill) |
 | Effect-tool calls | **830** |
 | Records written | 312 meals · 258 activities · 210 episodes · 13 tasks |
 | Automated capture | **2,670 raw events → 210 episodes** — a 12.7:1 collapse, all evidence-backed |
 | Corrections | **223** `change_log` entries against 312 meals |
 | End-to-end reply latency | **p50 15.9 s · p90 56.4 s · p95 79.6 s** (n=377, inbound → reply sent) |
-| Capability-guard rejections | **0** |
+| Capability-guard rejections | **6** — all `empty_actions`; **0** out-of-bundle |
 
 Three of those deserve comment rather than celebration.
 
@@ -40,12 +40,19 @@ users routinely fix what the estimate got wrong, which is exactly the intended l
 imprecisely and instantly, refine later. A low correction count would have meant the audit
 trail was decoration.
 
-**Zero guard rejections is the number to be careful about.** The capability guard has never
-fired in 586 production runs. That is what the design predicts — it is a backstop against a
-decision no correct model should produce — but it also means production traffic is not what
-validates it. Its correctness rests on unit tests and a 56-entry snapshot corpus over every
-intent's expanded bundle, which is why those are named in
-[chapter 06](06-quality.md) rather than left implicit.
+**The guard's rejections split unevenly, and the split is the interesting part.** The
+out-of-bundle barriers — an action or an effect tool outside the plan — have fired **zero**
+times in 586 runs. The empty-plan barrier fired **six**, none since 2026-07-15, and the last
+of them is the trace recorded as BR-027: a model that answered a user's counter-question
+helpfully, in prose, with no action to carry it. The guard was right about the shape and the
+schema was wrong about what a decision could be; the fix routed a question-shaped
+message-only decision onto `ask_user` rather than relaxing the barrier. [Full trace and
+numbers](EVIDENCE.md#8-production).
+
+Zero on the scope barriers means production traffic is not what validates them. Their
+correctness rests on unit tests and a 56-entry snapshot corpus over every intent's expanded
+bundle, which is why [chapter 06](06-quality.md) names those rather than leaving them
+implicit.
 
 ## What breaks first at 100×
 

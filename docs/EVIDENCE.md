@@ -372,7 +372,7 @@ Read from the production database on **2026-08-14**; window 2026-06-19 → 2026-
 | Registered users / who ever messaged / sustained (≥5 active days) | 14 / 13 / **4** |
 | Active days | 49 |
 | Inbound messages | 531 |
-| Agent runs | 586 — 541 succeeded, 29 needs-user, 16 terminal |
+| Agent runs | 586 — 541 succeeded, 29 needs-user, 16 terminal (9 provider, 6 guard, 1 backfilled orphan) |
 | Effect-tool calls | 830 |
 | Records written | 312 meals · 258 activities · 210 episodes · 223 audited corrections |
 | Automated raw events ingested | 2,670 |
@@ -391,13 +391,37 @@ for cost, not latency, and a mixed message pays for a router decision plus one d
 domain, sequentially. [Chapter 07](07-operations.md#what-it-actually-does-measured) carries
 what would fix it and why it has not been prioritized for a logging tool.
 
-**The capability guard has never fired in production.** Zero rejections across 586 agent runs;
-the 16 terminal failures are provider exhaustion (15) and one backfilled orphan from BR-032.
+**How often the guard fires**, split by which barrier:
 
-That is the number the design predicts and it is the one worth being careful about. The guard
-is a backstop against a decision no correct model should ever produce, so a zero here means
-the plan-scoping upstream is doing its job — and it also means **production traffic is not
-what validates this component**. The tests are:
+```console
+$ select count(*) from agent_runs where output::text ilike '%disallowed_%';
+0
+$ select count(*) from agent_runs where output::text ilike '%capability_guard%';
+6
+```
+
+The **scope** barriers — `disallowed_action`, `disallowed_effect_tool` — have never fired.
+Zero out of 586. The **empty-plan** barrier fired six times, all `reason: "empty_actions"`,
+five on FoodAgent and one on ActivityAgent, and none since 2026-07-15.
+
+That last date is not a coincidence. The sixth rejection, run `7ffed4e1`, **is** the trace
+recorded as BR-027. The user answered FoodAgent's own clarifying question with a
+counter-question. The model behaved correctly: it searched known nutrition, found nothing, and
+answered from general knowledge — `{"assistant_message": "Из горячих сэндвичей Меркадоны
+обычно бывают: … Какой из них твой?", "actions": []}`. The decision schema had no way to
+express "just talk", so a helpful answer arrived with zero actions, and the guard did exactly
+what it says: `empty_actions` → `FAILED_TERMINAL`, the model's text discarded, a generic
+failure message sent instead.
+
+The fix was not to loosen the guard. `finalize_node` now coerces a **question-shaped**
+message-only decision onto the universal `ask_user` path — the model's own text reaches the
+user and the run ends `needs_user`, exactly as if it had emitted `ask_user` itself. The
+barrier is unchanged; what changed is that the model was given a legitimate way to say the
+thing it was trying to say.
+
+So the honest reading of these numbers: the guard's scope barriers are a backstop against a
+decision no correct model has yet produced, which means **production traffic is not what
+validates them**. The tests are:
 [`test_common_guard.py`](../code/tests/agents/common/test_common_guard.py), and a snapshot
 corpus that pins the serialized bundle of **all 28 intents in both media states — 56
 snapshots** — so a silently widened plan fails a unit test instead of waiting for a model to
