@@ -24,8 +24,8 @@ job:
 
 Specs and plans are **historical evidence**, deliberately not rewritten to match what the
 code became. When implementation deviates from a spec, the deviation is recorded as an
-erratum in the spec rather than edited away. The trail is therefore a record of what was
-believed at each point — which is the only version of a design document worth keeping.
+erratum in the spec rather than edited away, so the trail records what was believed at each
+point rather than what turned out to be true.
 
 ## Documentation as a routed system
 
@@ -34,12 +34,11 @@ roadmap, contracts in the architecture documents, procedures in runbooks, decisi
 specs, defects in bug reports, eval freshness in generated status.
 
 The always-loaded index carries hard budgets — 300 lines, 3,000 words — enforced by a guard
-in CI, along with the existence of every file it links to. That constraint is the whole
-point: an index that can grow without limit stops being an index, and the budget forces
-detail into the document that owns it.
+in CI, along with the existence of every file it links to. The budget is what forces detail
+into the document that owns it — see [chapter 09](09-governance.md#documentation-is-routed-and-the-router-is-enforced).
 
-This is not a preference about tidiness. Context is finite. A knowledge base that repeats
-itself produces contradictory status, and contradictory status is worse than none.
+This is not a preference about tidiness. Context is finite, and a knowledge base that repeats
+itself produces contradictory status.
 
 ## Defects get written down before they get fixed
 
@@ -61,13 +60,11 @@ Three rules govern the file, and each was written after the absence of it cost s
   repository. An unverifiable citation reads as "covered" when it is not, which is worse than
   citing nothing.
 
-That third rule is the one worth transplanting. It is a process that noticed its own failure
-mode and closed it, and the failure mode — a document asserting coverage that does not exist —
-is exactly what a bug tracker is for.
+The third rule is the transplantable one: the process noticed that it had produced a false
+coverage claim, and closed that specific hole.
 
 The habit all three enforce: **reproduce before you act.** A finding from a review, a static
-analyzer, or another agent is a hypothesis until it is reproduced. Acting on unverified
-findings is how a codebase accumulates changes that fix nothing.
+analyzer, or another agent is a hypothesis until it is reproduced.
 
 ## AI-assisted delivery, directed rather than trusted
 

@@ -54,8 +54,7 @@ The rule that came out of it is written as guidance for the next case: prefer th
 duplicating a write tool per domain when one domain's action is simply "invoke another
 domain's existing effect with different input provenance".
 
-An exception with its reasoning attached is a precedent. Without it, it is just an
-inconsistency that the next person will copy.
+The reasoning is what makes it a precedent rather than an inconsistency to be copied.
 
 ## Repeated defects trigger a sweep, not another patch
 
@@ -135,23 +134,22 @@ disabled the first time it does, and then it protects nothing.
 | ADR-0004 | Agents use typed tools, not raw SQL writes |
 | ADR-0005 | Telegram user registration |
 
-Five is the right number. An ADR per feature is a changelog wearing a costume; these are the
-five decisions that anything else in the system can be checked against. ADR-0002 is the
-useful shape — it records a workflow that was *considered and rejected*, so the next design
+Five, because these are the decisions anything else in the system can be checked against —
+an ADR per feature would be a changelog under another name. ADR-0002 is the useful shape — it records a workflow that was *considered and rejected*, so the next design
 that starts to reinvent it meets the reasoning instead of the empty space where it would have
 gone.
 
 Specs and plans are treated the same way. They are **historical evidence** and are not
 rewritten to match what the code became; a deviation is recorded as an erratum inside the
-spec rather than edited away. A design document edited to match the implementation is a
-document that can no longer tell you anything you could not get from the code.
+spec rather than edited away — a design document edited to match the implementation tells
+you nothing the code does not already.
 
 ## What this is actually worth
 
 Three documents, one script, five ADRs, and a rule about the second occurrence of a defect
-class. None of it is exotic. What it buys is that a change made eighteen months in still has
-to answer the same questions as a change made in week one — and that the answers are checked
-by something other than the memory of the person making it.
+class. What it buys is that a change made eighteen months in still has to answer the same
+questions as a change made in week one, and that the answers are checked by something other
+than the memory of the person making them.
 
 ---
 

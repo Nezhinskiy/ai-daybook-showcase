@@ -54,9 +54,8 @@ strictly better than silence, and it is generated without a model, so it works p
 when models do not.
 
 The same principle runs through the capability guard in [chapter 02](02-agent-architecture.md):
-an out-of-bundle decision terminates rather than being repaired. A system that quietly
-recovers from a violated invariant teaches you nothing about how often the invariant is
-violated.
+an out-of-bundle decision terminates rather than being repaired, so a violated invariant
+shows up in the failure count instead of being absorbed.
 
 ## When one route of four fails
 
@@ -88,8 +87,8 @@ import time — a forward reference resolved lazily breaks replay, which is a fa
 appears months later on a workflow you have forgotten. And "just call the API here" is often
 simply not available.
 
-That is the trade. Hand-written lifecycle code is cheaper to write and is the part that
-fails at 2am.
+That is the trade, and it is worth naming as one: hand-written lifecycle code is cheaper to
+write, and it is the code that fails during a deploy at an inconvenient hour.
 
 ---
 

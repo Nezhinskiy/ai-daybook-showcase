@@ -117,8 +117,8 @@ date.
 
 This matters more than it sounds. The failure mode it prevents is the one where a green
 result from six weeks ago is quoted as evidence about code that has since changed
-underneath it — which is how an eval suite turns into decoration. Hashing the *evaluation
-contract* separately from the dataset is the load-bearing part: it distinguishes "we added
+underneath it. Hashing the *evaluation contract* separately from the dataset is the
+load-bearing part: it distinguishes "we added
 cases" from "we changed what passing means", and only the second invalidates a comparison
 between two runs.
 
@@ -133,8 +133,8 @@ worth more here than any number it currently holds, so the apparatus is what is 
 
 `metadata.create_all()` is never used. **97 reviewed Alembic migrations**, each inspected
 against the models before generation, with a migration-head guard in CI. Narrowing a `CHECK`
-or an enum obliges `downgrade()` to purge what no longer fits — a downgrade that would fail
-on real data is not a downgrade.
+or an enum obliges `downgrade()` to purge what no longer fits, so the downgrade still runs
+against data written under the wider constraint.
 
 ## How these were counted
 

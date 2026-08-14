@@ -445,8 +445,7 @@ states the limit of what it proves:
 > those are recovered at resolve time […] So this proves "identical `CapabilityPlan`", not
 > "identical resolved plan including codec projections".
 
-A snapshot test that documents what it does not cover is worth more than one that implies it
-covers everything.
+The uncovered part is named because a reader would otherwise assume it was covered.
 
 ---
 

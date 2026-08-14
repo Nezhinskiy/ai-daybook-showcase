@@ -90,7 +90,6 @@ with quota scaffolding.
 
 One deliberate gap, stated because it matters more than the tooling list: Sentry today
 *captures*; it does not alert. Code-defined monitors are on the roadmap rather than shipped.
-Claiming alerting that does not exist is how an on-call rotation discovers it at 3am.
 
 A second, sharper gap was found by reading production rather than dashboards: an effect that
 ends in `failed_terminal` is an ordinary receipt failure, not an exception, so an entire
@@ -121,8 +120,8 @@ backup provider on failover, vision, and transcription — cost per call.
 
 That is a deliberate trade: predictable cost and no per-message billing surprise, paid for
 with a shared rate limit and a mandatory failover path. It is the right trade at four
-sustained users and would be the wrong one at four thousand, at which point the ledger stops
-being scaffolding and starts being load-bearing.
+sustained users and would be the wrong one at four thousand, at which point the ledger has to
+carry real quota enforcement rather than sit ready for it.
 
 Eval runs against real models are therefore the largest discretionary spend in the project,
 which is why [chapter 06](06-quality.md) treats scoping a run before paying for it as part

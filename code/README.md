@@ -39,14 +39,13 @@ a typed node exposing `sql_name()`, and an unrecognized one as `exp.Anonymous` c
 raw name in `.this`. `Anonymous.sql_name()` returns the literal string `"ANONYMOUS"`. Keying
 the allow-list off `sql_name()` alone would therefore admit *every unrecognized function under
 one key* — `pg_read_file`, `version`, anything — the moment `"anonymous"` appeared in the set.
-The two-branch resolution is not defensive style; it is the difference between a working
-allow-list and a decorative one.
+The two-branch resolution is not defensive style; without it the allow-list admits everything
+it does not recognize.
 
 **`resolved_plan_scope_mismatch` ends with a `model_dump` comparison.** Every field is checked
 explicitly first, and then the serialized plans are compared anyway. The specific checks
 produce a diagnosable error string; the final one catches drift that no specific check
-anticipated — a reordered list, a newly added `CapabilityPlan` field. A guard that only knows
-the failures you thought of is a guard with an expiry date.
+anticipated — a reordered list, a newly added `CapabilityPlan` field.
 
 ## What is missing here
 
