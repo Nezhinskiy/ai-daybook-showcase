@@ -5,7 +5,7 @@
 This is a solo-built system. That makes the process question sharper rather than softer:
 with no reviewer to catch you, the discipline has to be structural, or it does not exist.
 
-**213 design and plan documents** sit behind the code. Not as ceremony — as the mechanism
+**227 design and plan documents** sit behind the code. Not as ceremony — as the mechanism
 that makes the next decision cheaper than the last.
 
 ## Design before plan before code
@@ -42,9 +42,10 @@ itself produces contradictory status.
 
 ## Defects get written down before they get fixed
 
-Ninety-five entries. Each carries the symptom, the production evidence that localized it, the
-exact seam at fault, and the fix commit by SHA — [three of them are reproduced in
-full](EVIDENCE.md#7-three-defects-unabridged).
+**141 entries**, one file each, with the index generated from them. Each carries the symptom,
+the production evidence that localized it, the exact seam at fault, and the fix commit or pull
+request — [four of them are reproduced in full](EVIDENCE.md#7-four-defects-unabridged). The
+tooling that validates them is [chapter 09](09-governance.md#the-defect-ledger-is-a-program-not-a-file).
 
 Three rules govern the file, and each was written after the absence of it cost something:
 
@@ -72,7 +73,7 @@ Much of this system was built with AI assistance. The interesting part is not th
 it is what had to be true for that to produce something trustworthy.
 
 Start with the number a reader will otherwise compute themselves and frame however they
-like: **3,673 commits and 255 merged pull requests in 89 days**, one author. Roughly forty
+like: **4,117 commits and 270 merged pull requests in 93 days**, one author. Roughly forty-four
 commits a day. That rate is not evidence of anything on its own — it is the reason every
 mechanism in [chapter 09](09-governance.md) exists, because a boundary nobody checks erodes
 in weeks at that speed, and a review pass by the person writing the change is not a check.
@@ -100,6 +101,58 @@ The claim worth making from all this is not "I used AI to go faster". It is that
 verification apparatus is strong enough that speed does not cost correctness — which is the
 same apparatus a team would need, built by one person because there was no one else to
 catch the mistakes.
+
+## Implementation plans written for a fleet, not a person
+
+The system in this repository orchestrates agents. So does the process that built it, and the
+artifact is checkable: the implementation plans are written to **fan out across parallel
+agents**, and the merge commits carry the lane names.
+
+The most recent one — deterministic product-code binding, twelve tasks — opens with a
+dependency graph rather than a task list:
+
+```text
+Wave 1 (4 lanes, fully parallel)
+  L-EVAL    Task 0   eval fixtures pass response_language
+  L-SEAM    Task 1   move resolve_product to catalog_resolution.py
+  L-REPO    Task 2   FoodProductCodeRepository.lookup_many
+  L-ORACLE  Task 8   evaluator: tool alternation + any_of groups
+
+Wave 2 (1 lane)              needs Task 1 + Task 2
+  L-BIND    Task 3   code_binding.py + the shared test scaffolding
+
+Wave 3 (3 lanes, parallel)   M and C need Task 3; E needs only Task 8
+  L-MEALS   Task 4 → 5   (meals.py — sequential inside the lane, one file)
+  L-COOK    Task 6        (cooking.py)
+  L-EVALS   Task 9        (dataset + the materialization proof test)
+
+Wave 4 (1 lane, after every Wave-3 merge)
+  L-INT     Task 7   static gates + the whole -m db lane
+
+Wave 5 (1 lane, serialized, human-gated: it spends paid runs)
+  L-SHIP    Task 11  the two real-model gate runs
+```
+
+Three isolation rules make that safe, and each exists because the alternative loses work:
+
+- **Every lane owns an exclusive write set**, listed file by file in the plan. A lane may
+  write only the files its tasks name. If a task turns out to need a file another lane owns,
+  it stops and the plan is amended — merging two lanes that both edited one file is how a
+  wave loses work silently.
+- **Every lane gets its own git worktree**, so a rebase in one cannot move another's HEAD.
+- **Every lane gets its own Postgres database.** The `-m db` tier runs real migrations and
+  real fixtures; two lanes sharing one test database corrupt each other's state in ways that
+  read as flaky tests. The plan assigns `ai_daybook_s0_<lane>` per lane rather than leaving it
+  to whoever runs it.
+
+And the last wave is **human-gated on purpose**: it is the one that spends paid real-model
+runs, so it is serialized behind a person rather than dispatched. Cost is a scheduling
+constraint, not an afterthought.
+
+The transferable claim is not "I used subagents". It is that fanning work out across
+independent agents is an *orchestration design problem* — dependency graph, exclusive
+ownership, state isolation, and a gate where the resource is scarce — and that it is the same
+problem the capability model solves inside the product, one level up.
 
 ## Three decisions where the judgment was the deliverable
 

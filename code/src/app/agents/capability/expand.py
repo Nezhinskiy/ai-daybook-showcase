@@ -7,7 +7,10 @@ from app.agents.capability.plan import CapabilityPlan
 from app.agents.capability.registry import INTENT_BUNDLES
 from app.domain_values import Intent, domain_of_intent
 
-UNSUPPORTED_INTENT_MESSAGE = "Пока не умею надёжно обработать это сообщение."
+# No pre-rendered unsupported-intent message lives here. Its one consumer
+# (activities/runtime/agent_exec.py's _unsupported_intent_result) holds an ExecuteAgentInput
+# with a resolved response_language, so it reads runtime_copy's UNSUPPORTED_INTENT_KEY at
+# render time instead. A module-level constant here could only pin one language.
 
 
 def _ask_user_only_plan(intent: Intent) -> CapabilityPlan:

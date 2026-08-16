@@ -11,20 +11,20 @@ corpus that does.
 
 ## The numbers on this page
 
-Measured at commit `6ad9968c`, 2026-08-14. Every command is in
+Measured at commit `85d65d2d`, 2026-08-17. Every command is in
 [how these were counted](#how-these-were-counted); every output is on the
 [evidence page](EVIDENCE.md#1-the-counts-and-the-commands-that-produced-them).
 
 | | |
 |---|---|
-| Tests | **8,391** — 7,683 Python test functions, 708 frontend |
-| Default lane, actually run | **7,817 passed, 3 skipped, 72 s** (parametrization expands functions into items) |
-| Test-to-production code | **1.72×** — 285k lines of tests against 165k of Python |
-| Eval cases | **339** across 11 agents |
+| Tests | **8,881** — 8,146 Python test functions, 735 frontend |
+| Default lane, actually run | **8,434 passed, 3 skipped, 84 s** (parametrization expands functions into items) |
+| Test-to-production code | **1.78×** — 302k lines of tests against 170k of Python |
+| Eval cases | **341** across 11 agents |
 | Deterministic evaluators | **57** |
 | Durable Temporal workflows | **20** |
 | Alembic migrations | **97** |
-| Confirmed defects on record | **95** |
+| Ledger entries | **141** — 114 fixed, 18 open, 5 void, 3 partial, 1 rejected |
 
 ## The deterministic suite
 
@@ -48,7 +48,7 @@ and tool boundary — raw dicts are never passed down and re-parsed.
 
 ## The eval corpus
 
-**339 cases across 11 agents**, exercised against five models — `claude-sonnet-5`,
+**341 cases across 11 agents**, exercised against five models — `claude-sonnet-5`,
 `claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-5.6-terra`, and `gpt-5.5` — reached through three
 access lanes (`claude_cli`, `openrouter`, `codex_app_server`), which is what "provider" means
 everywhere below.
@@ -62,7 +62,7 @@ answer "would a cheaper or different model hold this contract", not to fill a gr
 | Agent | Cases | | Agent | Cases |
 |---|---|---|---|---|
 | router | 92 | | journal | 24 |
-| food | 56 | | inventory | 21 |
+| food | 58 | | inventory | 21 |
 | planning | 34 | | faq | 14 |
 | query | 29 | | profile | 9 |
 | activity | 26 | | raw_events | 9 |
@@ -149,19 +149,19 @@ against data written under the wider constraint.
 
 ## How these were counted
 
-Every figure in this repository comes from a command run at one pinned commit, `6ad9968c`.
+Every figure in this repository comes from a command run at one pinned commit, `85d65d2d`.
 The commands and their raw output are on the
 [evidence page](EVIDENCE.md#1-the-counts-and-the-commands-that-produced-them):
 
 | Metric | Value | Command |
 |---|---|---|
-| Python test functions | 7,683 | `git ls-files tests \| grep '\.py$' \| tr '\n' '\0' \| xargs -0 grep -hoE '^[[:space:]]*(async )?def test_' \| wc -l` |
-| Frontend test cases | 708 | `grep -rhoE "^\s*(it\|test)\(" frontend/src \| wc -l` |
+| Python test functions | 8,146 | `git ls-files tests \| grep '\.py$' \| tr '\n' '\0' \| xargs -0 grep -hoE '^[[:space:]]*(async )?def test_' \| wc -l` |
+| Frontend test cases | 735 | `grep -rhoE "^\s*(it\|test)\(" frontend/src \| wc -l` |
 | Deterministic evaluators | 57 | `grep -cE "^class [A-Za-z]+\(Evaluator\)" src/app/evals/evaluators.py` |
-| Eval cases | 339 | `grep -hcE "^  - " src/app/agents/skills/*/evals/dataset.yaml \| awk '{s+=$1} END {print s}'` |
+| Eval cases | 341 | `grep -hcE "^  - " src/app/agents/skills/*/evals/dataset.yaml \| awk '{s+=$1} END {print s}'` |
 | Durable workflows | 20 | `grep -rh '@workflow.defn' src/app/workflows/ \| wc -l` |
 | Migrations | 97 | `ls -1 alembic/versions/*.py \| wc -l` |
-| Confirmed defects | 95 | `grep -cE '^## BR-' docs/bug-reports.md` |
+| Ledger entries | 141 | `ls -1 docs/bugs/BR-*.md \| wc -l` |
 
 Two rules, each of which has already produced a wrong number in this project once:
 

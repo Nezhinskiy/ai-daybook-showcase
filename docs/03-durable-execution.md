@@ -73,7 +73,7 @@ The harder failure is not a route that fails — it is a route that **succeeds w
 fragment routed to the wrong domain produces a perfectly valid record of the wrong kind, and
 nothing downstream can detect that, because every invariant it would violate belongs to the
 domain it was never sent to. There is no runtime mitigation. The defence is entirely
-upstream: the router carries by far the largest eval suite in the project — 92 of 339 cases
+upstream: the router carries by far the largest eval suite in the project — 92 of 341 cases
 — and a reply to a mis-routed record routes back to the right agent with full context, so a
 correction costs one message rather than a manual edit.
 

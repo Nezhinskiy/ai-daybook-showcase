@@ -2,15 +2,16 @@
 
 [← back to the overview](../README.md)
 
-First commit 2026-05-16, latest 2026-08-14. **3,673 commits and 255 merged pull requests in
-89 days** — around 41 commits and 3 merged PRs a day, by one person.
+First commit 2026-05-16, latest 2026-08-17. **4,117 commits and 270 merged pull requests in
+93 days** — around 44 commits and 3 merged PRs a day, by one person.
 
 That rate is the reason this chapter exists. A codebase decays through erosion of the
-boundaries that made the code good rather than through bad code, and at forty commits a day
-that erosion takes weeks, not years. There is also no second person to notice it happening.
+boundaries that made the code good rather than through bad code, and at forty-odd commits a
+day that erosion takes weeks, not years. There is also no second person to notice it
+happening.
 
 So the boundaries are written down as contracts, and the contracts are enforced by machines.
-Every one of those 3,673 commits went through them.
+Every one of those 4,117 commits went through them.
 
 ## Every package declares what it must not know
 
@@ -91,6 +92,47 @@ exhaustive enumeration, not a structural rewrite. That is a different rule from 
 same-seam one, and applying the wrong one produces either a needless refactor or a fourth
 occurrence.
 
+## The defect ledger is a program, not a file
+
+For most of the project the bug log was one Markdown file. At 95 entries it stopped working
+the way shared files stop working: every branch that filed a bug touched the same lines, and
+merges resolved by picking a side.
+
+It is now **141 entry files** under `docs/bugs/`, with the index generated from them —
+and the generator is `scripts/bug_reports.py`, **2,035 lines carrying 3,198 lines of tests**.
+It runs in CI, in two jobs, so both the code path and the documentation path reach it.
+
+Five subcommands, and the interesting half is what each one *refuses*:
+
+| | |
+|---|---|
+| `check` | Validates every entry, index freshness, and every `BR-nnn` mentioned anywhere in code. |
+| `index` | Regenerates the index — and **refuses if the file holds one line the generator did not write**, because rendering over it would delete that content silently, with exit 0. |
+| `new` | Allocates the next free identifier across every reference and scaffolds the entry. Refuses an identifier whose file already exists, before writing anything. |
+| `renumber` | Moves a colliding entry *and sweeps every reference to it*, failing loudly on any it could not rewrite. |
+| `migrate --from <ref>` | Three-way import of a pre-split branch's ledger edits. Refuses rather than proceeding whenever it cannot prove every edit survives. |
+
+Two design decisions carry most of the value.
+
+**A destructive command must name the repair, not just the refusal.** Each refusal above
+prints the specific command that resolves it — and where no command can (content only a human
+can recover), it says so instead of suggesting one. A guard that blocks without naming the
+exit gets bypassed.
+
+**Identifiers never move.** Five entries carry `status: void` rather than being deleted,
+because BR numbers are cited in commits, prose and code, and a deletion would silently
+renumber everything a reader might follow. `check` treats a mention of a void identifier as
+valid and a mention of an unfiled one as an error.
+
+**And the guard writes down what it cannot see.** Its runbook carries nine explicit blind
+spots: stale `path:line` citations inside an entry, a `fixed_in` naming a commit that does
+not exist, an identifier written in a gitignored file, a typo inside the guard's own fixture
+file. The sharpest one is a gap in **CI's own path filters** — a `BR-nnn` added under
+`scripts/`, `clients/`, `infra/` or the repository root reaches the local check but not the
+CI one, so it merges green and surfaces on somebody else's pull request. That is written down
+as a known gap with its cause and its fix, rather than left for the next person to rediscover
+as a mystery.
+
 ## Documentation is routed, and the router is enforced
 
 One fact has one authoritative home. Everything else links.
@@ -111,15 +153,25 @@ The always-loaded index is capped, and the cap is a script:
 AGENTS_MAX_LINES = 300
 AGENTS_MAX_WORDS = 3_000
 CURRENT_STATUS_MAX_LINES = 50
+ROADMAP_PROSE_MAX_LINES = 350
+ROADMAP_PROSE_MAX_WORDS = 3_500
 ```
 
 <sub>`scripts/check_documentation_hygiene.py` — also asserts that every local file linked
-from the index exists, and that no bug-report ID is duplicated.</sub>
+from the index exists.</sub>
 
 An index that can grow without limit stops being an index. The budget is what forces detail
 down into the document that owns it, and the "must not contain" list is as specific as the
 boundaries table: no shipped-feature narratives, no PR or commit history, no dated eval
 results, no resolved incidents.
+
+The last two constants were added when the roadmap hit the same wall the index had: it had
+become a delivery narrative of everything ever shipped, and the frontier — the only part
+anyone reads to decide what to do next — was buried under it. It split into a frontier
+document and an archive, and the budget now applies to the **hand-written prose only**,
+excluding the generated design-and-plan trail below it. That exclusion is the load-bearing
+detail: a budget that counted generated content would punish the project for having a
+complete index and reward deleting it.
 
 **Where the guard deliberately does not run.** It gates pull requests into `dev` and nothing
 else — not `dev` → `main`, not pushes to `main`, not deploys. That is a decision, not a gap:
@@ -149,8 +201,8 @@ you nothing the code does not already.
 
 ## What this is actually worth
 
-Three documents, one script, five ADRs, and a rule about the second occurrence of a defect
-class. What it has already bought, over 3,673 commits in 89 days, is that commit 3,673 had to
+Four documents, two scripts, five ADRs, and a rule about the second occurrence of a defect
+class. What it has already bought, over 4,117 commits in 93 days, is that commit 4,117 had to
 answer the same questions as commit 12 — and that the answers were checked by something other
 than the memory of the person making them, which at that rate is not a resource you can
 spend.

@@ -34,9 +34,14 @@ auditable today; it is simply not yet drawn.
 
 A written design or plan exists; no code does.
 
-- **Food product identity** — a six-document program: an umbrella design plus five slices
-  covering per-user identity beyond product codes, usage bindings, a lexical shadow index,
-  semantic calibration, and resolution UX. Nothing has reached code or migrations.
+- **Food product identity, slices S1–S5** — a seven-document program covering per-user
+  identity beyond product codes: usage bindings, a lexical shadow index, semantic
+  calibration, and resolution UX. **S0, deterministic product-code binding, shipped in
+  August 2026**; S1–S5 have no implementation plan and nothing in code or migrations, and are
+  gated behind a destructive schema contraction that has not started. The roadmap states that
+  gate as a table of five checkpoints with the evidence that each has not begun — an absent
+  migration file, an absent workflow file, three columns still mapped in the ORM — rather
+  than as a status word.
 - **Rare router clarification and context-preserving continuations** — one categorical router
   abstention plus durable continuations, layered over the already-shipped inline questions
   and durable conversation context.

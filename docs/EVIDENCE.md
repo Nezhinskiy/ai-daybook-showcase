@@ -3,7 +3,7 @@
 [← back to the overview](../README.md)
 
 Output, not description. Every block below is something a command printed, pasted verbatim.
-Measured at commit `6ad9968c`, 2026-08-14, on a clean tree.
+Measured at commit `85d65d2d`, 2026-08-17, on a clean tree.
 
 **Contents** — [counts](#1-the-counts-and-the-commands-that-produced-them) ·
 [one request end to end](#2-one-request-end-to-end) ·
@@ -11,7 +11,7 @@ Measured at commit `6ad9968c`, 2026-08-14, on a clean tree.
 [the plan-scope check, exercised](#4-the-plan-scope-check-exercised) ·
 [the SQL validator, exercised](#5-the-sql-validator-exercised) ·
 [a defect the evals could not see](#6-a-production-defect-the-eval-suite-could-not-see) ·
-[three defects unabridged](#7-three-defects-unabridged) ·
+[four defects unabridged](#7-four-defects-unabridged) ·
 [production](#8-production) ·
 [the current strict gate](#9-the-current-strict-gate)
 
@@ -21,25 +21,25 @@ Measured at commit `6ad9968c`, 2026-08-14, on a clean tree.
 
 ```console
 $ git ls-files tests | grep '\.py$' | tr '\n' '\0' | xargs -0 grep -hoE '^[[:space:]]*(async )?def test_' | wc -l
-    7683
+    8146
 $ grep -rhoE "^\s*(it|test)\(" frontend/src | wc -l
-     708
+     735
 $ git ls-files tests | grep '\.py$' | tr '\n' '\0' | xargs -0 cat | wc -l
-  284626
+  302080
 $ git ls-files src  | grep '\.py$' | tr '\n' '\0' | xargs -0 cat | wc -l
-  165458
+  169657
 $ grep -cE "^class [A-Za-z]+\(Evaluator\)" src/app/evals/evaluators.py
 57
 $ grep -hcE "^  - " src/app/agents/skills/*/evals/dataset.yaml | awk '{s+=$1} END {print s}'
-339
+341
 $ grep -rh '@workflow.defn' src/app/workflows/ | wc -l
       20
 $ ls -1 alembic/versions/*.py | wc -l
       97
 $ ls -1 docs/superpowers/specs/*.md docs/superpowers/plans/*.md | wc -l
-     213
-$ grep -cE '^## BR-' docs/bug-reports.md
-95
+     227
+$ ls -1 docs/bugs/BR-*.md | wc -l
+     141
 ```
 
 The default lane, in full:
@@ -47,10 +47,10 @@ The default lane, in full:
 ```console
 $ python -m pytest -m "not integration" -n 8 -q
 ........................................................................ [100%]
-7817 passed, 3 skipped in 71.62s (0:01:11)
+8434 passed, 3 skipped in 83.86s (0:01:23)
 ```
 
-7,683 is the count of test *functions* in tracked files; 7,817 is what pytest **collects**
+8,146 is the count of test *functions* in tracked files; 8,434 is what pytest **collects**
 after parametrization, in the lane that excludes the Postgres- and Temporal-backed tiers.
 Those two numbers are different things and are reported as different things.
 
@@ -66,7 +66,7 @@ Per-agent eval cases:
 $ for f in src/app/agents/skills/*/evals/dataset.yaml; do
     echo "$(basename $(dirname $(dirname $f))) $(grep -cE '^  - ' $f)"; done | sort -k2 -rn
 router_agent 92
-food_agent 56
+food_agent 58
 planning_agent 34
 query_agent 29
 activity_agent 26
@@ -105,7 +105,8 @@ expand_intent(Intent("calendar_event_log"), has_media=False).model_dump(mode="js
   ],
   "read_tools": ["search_calendar_events", "search_tasks", "search_agent_memories"],
   "context_blocks": [
-    "time", "replied_to", "predecessor_handoff", "recent_tasks", "agent_memories", "conversation"
+    "time", "replied_to", "predecessor_handoff", "language",
+    "recent_tasks", "agent_memories", "conversation"
   ]
 }
 ```
@@ -119,8 +120,8 @@ allowed_effect_tools: frozenset({'create_calendar_event', 'update_calendar_event
                      'create_agent_memory', 'update_agent_memory',
                      'deactivate_agent_memory', 'ask_user'})
 read_tools:         ['search_calendar_events', 'search_tasks', 'search_agent_memories']
-context_blocks:     ['time', 'replied_to', 'predecessor_handoff', 'recent_tasks',
-                     'agent_memories', 'conversation']
+context_blocks:     ['time', 'replied_to', 'predecessor_handoff', 'language',
+                     'recent_tasks', 'agent_memories', 'conversation']
 skill:              13,952 characters
 ```
 
@@ -132,7 +133,7 @@ reach them if it names them anyway.
 `PlannedToolCall(tool_name, input)` — which is what §3 checks. A surviving call dispatches to
 the typed effect tool, which validates its input against a Pydantic contract, **forces
 `user_id` from the request scope rather than accepting it from the model**, writes, and
-records a `change_log` entry on any update. 830 such calls have executed in production.
+records a `change_log` entry on any update. 836 such calls have executed in production.
 
 One real decision payload appears in [§8](#8-production) — captured from the trace that
 became BR-027. Full inbound-to-row captures are not published here, because a real trace
@@ -170,9 +171,9 @@ against the plan actually in hand, field by field.
 ```console
 untampered            -> None
 wrong intent          -> plan_domain:food_agent:expected_domain:planning_agent
-dropped context block -> plan_context_blocks:time,replied_to,predecessor_handoff,recent_tasks,
-                         conversation:expected_context_blocks:time,replied_to,
-                         predecessor_handoff,recent_tasks,agent_memories,conversation
+dropped context block -> plan_context_blocks:time,replied_to,predecessor_handoff,language,
+                         recent_tasks,conversation:expected_context_blocks:time,replied_to,
+                         predecessor_handoff,language,recent_tasks,agent_memories,conversation
 extra skill fragment  -> plan_skill_fragments:…,memory,interactive_questions,memory:
                          expected_skill_fragments:…,memory,interactive_questions
 extra effect tool     -> plan_serialized_mismatch
@@ -282,10 +283,10 @@ and "transient" is a conclusion that requires a controlled baseline, not a re-ru
 
 ---
 
-## 7. Three defects, unabridged
+## 7. Four defects, unabridged
 
-Ninety-five entries; three that show different muscles. Each carries the symptom, the
-production evidence that localized it, the exact seam, and the fix.
+141 entries; four that show different muscles. Each carries the symptom, the evidence that
+localized it, the exact seam, and the fix.
 
 ### BR-064 — a determinism violation in workflow code
 
@@ -370,6 +371,51 @@ is `None`.
 This one is a boundary, not a bug: the connector runs on the user's own machine, and the thing
 being decided is what is allowed to leave it.
 
+### BR-127 — a test that was passing by winning a coin flip
+
+- **Found:** 2026-08-15, investigating a reported ~1-in-5 flake · **Severity:** medium ·
+  **Status:** fixed (PR #266)
+- **Seam:** `tests/workflows/test_interactive_question_callback.py` and
+  `tests/workflows/test_main_message_interactive_reply.py`
+
+Included because the finding is not the flake. The finding is that the assertion was wrong,
+and that fixing the flake by relaxing a timeout would have preserved the error.
+
+Both tests assert `timeout.type == TimeoutType.SCHEDULE_TO_CLOSE` on a handoff activity no
+worker ever claims. The call passes `schedule_to_close_timeout` and leaves
+`schedule_to_start_timeout` unset — so Temporal **derives the missing one from the budget**
+and the scheduled event carries `sts = stc = 2s` for a 2 s injected budget. With no worker,
+both deadlines expire on the same instant, and which one the server blames is a tie-break,
+not a contract. It is not sensitive to the budget's size: `schedule_to_start ==
+schedule_to_close` holds by construction at any value, including the two-minute production
+constant.
+
+Measured, at a 2 s injected budget: the time-skipping test server reported `SCHEDULE_TO_CLOSE`
+or `SCHEDULE_TO_START` at random — **7 of 10** single-test runs failed the assertion on a
+loaded host — while the real server reported `SCHEDULE_TO_START` **5 of 5**. The test was
+passing by winning a coin flip, on the side production never lands on.
+
+**Then the harder question: what did the assertion actually prove?** Its own comment claimed
+it distinguished three regressions. Each was injected and measured:
+
+| injected regression | old assertion |
+|---|---|
+| drop `schedule_to_close_timeout` (per-attempt bound only) | not caught cleanly — the workflow hangs forever |
+| budget ignored (production constant instead of the injected value) | **passes**, only ~40 s slower |
+| unbounded retry replaced by a single attempt | **passes** — byte-identical failure |
+
+Two of the three it named were invisible to it. With no worker no attempt ever runs, so the
+retry state is `TIMEOUT` whatever the retry policy is; "distinguishes an exhausted retry
+policy" was never true in that scenario.
+
+**It also corrected an earlier conclusion of mine.** These two tests had been recorded as an
+environmental flake, on the strength of a stashed-baseline A/B that reproduced them on
+untouched `dev`. That A/B was run correctly and proves exactly one thing — the change under
+test did not cause it — which is not the same as "the host did". The question I had not asked
+was whether it fails on a *quiet* machine. It does. The private note on flake attribution now
+carries that correction above the technique it corrects.
+
+
 ---
 
 ## 8. Production
@@ -377,25 +423,25 @@ being decided is what is allowed to leave it.
 Small numbers, stated as they are. This is a personal system with real users, not a product
 with traction.
 
-Read from the production database on **2026-08-14**; window 2026-06-19 → 2026-08-13.
+Read from the production database on **2026-08-17**; window 2026-06-19 → 2026-08-16.
 
 | | |
 |---|---|
 | Registered users / who ever messaged / sustained (≥5 active days) | 14 / 13 / **4** |
-| Active days | 49 |
-| Inbound messages | 531 |
-| Agent runs | 586 — 541 succeeded, 29 needs-user, 16 terminal (6 guard, 1 decision timeout, 1 read-tool cap, 1 backfilled orphan, 7 with no error recorded) |
-| Effect-tool calls | 830 |
-| Records written | 312 meals · 258 activities · 210 episodes · 223 audited corrections |
+| Active days | 51 |
+| Inbound messages | 538 |
+| Agent runs | 592 — 545 succeeded, 30 needs-user, 17 terminal (6 guard, 1 decision timeout, 1 read-tool cap, 1 materialization failure, 1 backfilled orphan, 7 with no error recorded) |
+| Effect-tool calls | 836 |
+| Records written | 317 meals · 259 activities · 210 episodes · 225 audited corrections |
 | Automated raw events ingested | 2,670 |
 
 Reply latency, inbound message to first sent reply:
 
 ```console
-n    377
-p50  15.9 s
-p90  56.4 s
-p95  79.6 s
+n    384
+p50  16.0 s
+p90  57.3 s
+p95  79.9 s
 ```
 
 Slow, and known why: the interactive path runs on a subscription-backed CLI provider chosen
@@ -411,15 +457,16 @@ rather than searching the JSON as text, so the zero below is "no row carries tha
 $ select coalesce(output->>'error','(none)'), coalesce(output->>'reason','(none)'), count(*)
     from agent_runs group by 1,2 order by 3 desc;
 
-(none)                    | (none)                                       | 578
-capability_guard_rejected | empty_actions                                |   6
-decision_timeout          | turn exceeded its 180s budget                |   1
-tool_rounds_exceeded      | read-tool invocation cap exceeded during turn |   1
+(none)                         | (none)                                       | 583
+capability_guard_rejected      | empty_actions                                |   6
+decision_timeout               | turn exceeded its 180s budget                |   1
+decision_materialization_failed| lower_priority_source_selected               |   1
+tool_rounds_exceeded           | read-tool invocation cap exceeded during turn |   1
 ```
 
 Every `capability_guard_rejected` row carries `empty_actions`. `disallowed_action` and
 `disallowed_effect_tool` — the two **scope** barriers — appear on no row at all: zero out of
-586. The **empty-plan** barrier fired six times, five on FoodAgent and one on ActivityAgent,
+592. The **empty-plan** barrier fired six times, five on FoodAgent and one on ActivityAgent,
 none since 2026-07-15.
 
 What that query does and does not establish: it is exhaustive over `agent_runs`, so no
@@ -471,33 +518,38 @@ The uncovered part is named because a reader would otherwise assume it was cover
 snapshots taken on different dates against different dataset versions is meaningless. That
 argument only earns its keep if a single current run is published instead. Here it is.
 
-**Ten agents, `--k 5`, `--threshold 1.0`, pass rate 1.00** — 283 cases, **1,415 case-runs**,
-run 2026-08-01 and still reported `fresh` by the hash mechanism at the pinned commit two weeks
-later.
+**Eight agents, `--k 5`, `--threshold 1.0`, pass rate 1.00** — 245 cases, **1,225 case-runs**,
+run 2026-08-01 and still reported `fresh` by the hash mechanism at the pinned commit.
 
 | Agent | Cases | k | Threshold | Pass | Skill |
 |---|---|---|---|---|---|
 | router | 92 | 5 | 1.0 | 1.00 | 1.25.2 |
 | planning | 34 | 5 | 1.0 | 1.00 | 1.8.12 |
-| query | 29 | 5 | 1.0 | 1.00 | 1.6.1 |
 | activity | 26 | 5 | 1.0 | 1.00 | 2.12.4 |
 | raw_events_analyzer | 25 | 5 | 1.0 | 1.00 | 1.13.0 |
 | journal | 24 | 5 | 1.0 | 1.00 | 1.4.0 |
 | inventory | 21 | 5 | 1.0 | 1.00 | 1.4.2 |
 | faq | 14 | 5 | 1.0 | 1.00 | 1.2.0 |
-| profile | 9 | 5 | 1.0 | 1.00 | 1.2.0 |
 | raw_events | 9 | 5 | 1.0 | 1.00 | 1.1.0 |
+
+**It was ten agents three days ago.** The previous revision of this page published ten,
+283 cases, 1,415 case-runs. `query_agent` and `profile_agent` have since dropped off it —
+not because a run failed, but because their prompts moved and the freshness verdict followed.
+Nothing was re-run and no result was retracted; the same two artifacts still sit on disk
+reporting 1.00, and they simply stopped counting as evidence about the current code. That is
+the mechanism working, and it is the reason this section is a table of eight rather than a
+sentence about a matrix.
 
 One artifact, whole, so the freshness claim is checkable rather than asserted:
 
 ```json
-{ "agent": "query_agent", "skill_version": "1.6.1",
-  "content_hash":             "sha256:5b28f03ca83b017107b44ab172ac2ad332e11a87cc9f33eccf49cef98ad797a",
-  "dataset_hash":             "sha256:3a808cbc6b9137208ad2fb497148fb0c09cde37b56236687d9fd1dac62709e0",
-  "evaluation_contract_hash": "sha256:9976d974f61e006d12c6872a8177403943bbd49afe8b409810206889116f7f6",
-  "execution_profile_digest": "sha256:e45d900fe72915ce74265c5ccde87bab6b11dfdb215581813b9496e5f2978cb",
-  "case_count": 29, "model": "codex_app_server:gpt-5.6-terra", "k": 5,
-  "threshold": 1.0, "ran_at": "2026-08-01T11:19:59Z", "pass_rate": 1.0 }
+{ "agent": "router_agent", "skill_version": "1.25.2",
+  "content_hash":             "sha256:1cae093f1685b1156d6f99cf77062396f416e7453bddffcae4f99c4b5424ffef",
+  "dataset_hash":             "sha256:a06aedf7589ab878817d000f7b2094857a54dbb5805f9b9d9a9b1b88c7cf515c",
+  "evaluation_contract_hash": "sha256:1e4d77a99341a373211f316d28e38b4dd13d1e0a2b7c7f0e7be7ab8ade232652",
+  "execution_profile_digest": "sha256:e45d900fe72915ce74265c5ccde87bab6b11dfdb215581813b9496e5f2978cb9",
+  "case_count": 92, "model": "codex_app_server:gpt-5.6-terra", "k": 5,
+  "threshold": 1.0, "ran_at": "2026-08-01T09:04:48Z", "pass_rate": 1.0 }
 ```
 
 ### Three things this does not say
@@ -510,16 +562,19 @@ threshold 0.00**, not a strict gate:
 
 | Agent | Pass (k=1 screen, 2026-08-06) | | Agent | Pass |
 |---|---|---|---|---|
-| faq · inventory · journal · profile · query · raw_events · raw_events_analyzer | 1.00 | | router | 0.99 |
+| faq · inventory · journal · raw_events · raw_events_analyzer | 1.00 | | router | 0.99 |
 | planning | 0.97 | | activity | 0.92 |
+
+<sub>`profile_agent` and `query_agent` also screened 1.00 on that date and have since gone
+stale; `food_agent` screened 0.89 and is covered below.</sub>
 
 A k=1 screen is a different instrument from a k=5 gate at threshold 1.0 and is labelled as
 one. Reporting the 1.00 figures without that distinction would be the exact move
 [chapter 06](06-quality.md) refuses.
 
-**FoodAgent is excluded, and it is the hardest agent.** Its skill is at 1.21.1; the last run
-on any provider tested 1.15.4 or earlier, so every FoodAgent cell reads
-`stale: prompt+dataset` and none of its 56 cases are in the 283 above. Its most recent
+**FoodAgent is excluded, and it is the hardest agent.** Every FoodAgent cell reads
+`stale: prompt+dataset` — its skill has moved well past what any recorded run tested — so
+none of its 58 cases are in the 245 above. Its most recent
 production-lane screen scored **0.89 at k=1** against a skill version that no longer exists.
 Two of its cases are on record as not reliably green at k=1 — BR-073, open.
 

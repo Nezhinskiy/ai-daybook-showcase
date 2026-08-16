@@ -38,7 +38,7 @@ does — [chapter 01](docs/01-product.md).
 |---|---|---|
 | **One LLM decision per request, pre-scoped.** An intent expands into a `CapabilityPlan` by pure code; an out-of-bundle call is `FAILED_TERMINAL` with no partial writes — checked against the *plan*, so "no partial writes" is structural rather than a rollback. | [chapter 02](docs/02-agent-architecture.md) | [the guard, exercised](docs/EVIDENCE.md#3-the-guard-exercised) |
 | **An LLM writes free-form SQL against production, safely.** `sqlglot` AST validation, a role holding no write grant, and Postgres row-level security. Defeating any one of the three buys nothing. | [chapter 04](docs/04-security.md) | [the validator, exercised](docs/EVIDENCE.md#5-the-sql-validator-exercised) |
-| **339 eval cases, 57 deterministic evaluators, no judge model, threshold 1.0, no retries.** A flaky case is a defect to root-cause, never something to retry past. | [chapter 06](docs/06-quality.md) | [a defect the evals could not see](docs/EVIDENCE.md#6-a-production-defect-the-eval-suite-could-not-see) |
+| **341 eval cases, 57 deterministic evaluators, no judge model, threshold 1.0, no retries.** A flaky case is a defect to root-cause, never something to retry past. | [chapter 06](docs/06-quality.md) | [a defect the evals could not see](docs/EVIDENCE.md#6-a-production-defect-the-eval-suite-could-not-see) |
 
 ## Provenance
 
@@ -48,22 +48,22 @@ other:
 
 ```console
 $ python -m pytest -m "not integration" -n 8 -q
-7817 passed, 3 skipped in 71.62s (0:01:11)
+8434 passed, 3 skipped in 83.86s (0:01:23)
 
 $ git ls-files tests | grep '\.py$' | tr '\n' '\0' \
     | xargs -0 grep -hoE '^[[:space:]]*(async )?def test_' | wc -l
-    7683
+    8146
 ```
 
-<sub>Two different things: 7,683 test *functions* in tracked files, 7,817 test *items* pytest
+<sub>Two different things: 8,146 test *functions* in tracked files, 8,434 test *items* pytest
 collects after parametrization in the lane that excludes the Postgres and Temporal tiers.</sub>
 
 [**docs/EVIDENCE.md**](docs/EVIDENCE.md) carries the rest as raw output: every count with its
 command, one request traced from intent to written row, the guard and the SQL validator
-rejecting real input, three defects unabridged, and what the system actually does in
+rejecting real input, four defects unabridged, and what the system actually does in
 production.
 
-[**code/**](code/) is the capability kernel itself — 1,069 lines of source and 1,268 of tests,
+[**code/**](code/) is the capability kernel itself — 1,072 lines of source and 1,268 of tests,
 copied verbatim, readable in twenty minutes.
 
 ## Read on
@@ -113,5 +113,5 @@ published for reading and no license to use them is granted. All rights reserved
 
 ---
 
-<sub>Snapshot of commit `6ad9968c`, 2026-08-14. The private repository has moved on since;
+<sub>Snapshot of commit `85d65d2d`, 2026-08-17. The private repository has moved on since;
 figures here are not updated continuously.</sub>

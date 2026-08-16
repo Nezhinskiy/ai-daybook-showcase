@@ -7,7 +7,7 @@ novel. Everything else the system does (Temporal workflows, SQLAlchemy repositor
 SPA) is competent but conventional, and reading it would tell you nothing you do not already
 know.
 
-**2,337 lines: 1,069 of source, 1,268 of tests.** Twenty minutes end to end.
+**2,340 lines: 1,072 of source, 1,268 of tests.** Twenty minutes end to end.
 
 ## What to read, in order
 
@@ -16,7 +16,7 @@ know.
 | [`plan.py`](src/app/agents/capability/plan.py) | 15 | The whole contract between code and model. Read this first — it is the entire interface the LLM is allowed to act inside. |
 | [`model.py`](src/app/agents/capability/model.py) | 112 | `Action`, `Capability`, `IntentBundle` as frozen dataclasses. Note that `universal` is a property of the action object, not a hardcoded string in the guard. |
 | [`registry.py`](src/app/agents/capability/registry.py) | 192 | The intent → bundle table. The only place a capability is composed. |
-| [`expand.py`](src/app/agents/capability/expand.py) | 104 | Pure code. Intent in, `CapabilityPlan` out, no model involved. An unknown intent expands to an ask-only plan rather than raising. |
+| [`expand.py`](src/app/agents/capability/expand.py) | 107 | Pure code. Intent in, `CapabilityPlan` out, no model involved. An unknown intent expands to an ask-only plan rather than raising. |
 | [`resolve.py`](src/app/agents/capability/resolve.py) | 175 | Rehydration into typed objects — and `resolved_plan_scope_mismatch`, which re-derives the canonical plan and compares it field by field against the one actually in hand. |
 | [`guard.py`](src/app/agents/common/guard.py) | 36 | The fail-closed barrier. Thirty-six lines is the point: the work was done upstream. |
 | [`readonly_sql.py`](src/app/db/effects/readonly_sql.py) | 389 | The `sqlglot` AST validator that lets a model write free-form SQL against production. |
@@ -56,4 +56,4 @@ not included.
 
 ---
 
-<sub>Copied verbatim from the private repository at commit `6ad9968c`, 2026-08-14.</sub>
+<sub>Copied verbatim from the private repository at commit `85d65d2d`, 2026-08-17.</sub>
