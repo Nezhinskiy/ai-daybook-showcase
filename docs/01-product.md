@@ -80,7 +80,7 @@ contract. An archivist that chats is an archivist you stop writing to.
 Keeper notes, journal entries, and CBT records are fully shipped on the capture side —
 typed effect tools, tags, corrections, the note→task handoff, and nine read-only SQL views
 over them — and have no Mini App screen. Capture was deliberately sequenced ahead of
-presentation. Notes are next; see [chapter 10](10-roadmap.md).
+presentation. Notes are next; see [chapter 11](11-roadmap.md).
 
 For journal capture specifically, staying chat-only is a product decision rather than a
 missing screen.

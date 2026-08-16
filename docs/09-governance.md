@@ -124,14 +124,14 @@ because BR numbers are cited in commits, prose and code, and a deletion would si
 renumber everything a reader might follow. `check` treats a mention of a void identifier as
 valid and a mention of an unfiled one as an error.
 
-**And the guard writes down what it cannot see.** Its runbook carries nine explicit blind
+**And the guard writes down what it cannot see.** Its runbook carries eight explicit blind
 spots: stale `path:line` citations inside an entry, a `fixed_in` naming a commit that does
 not exist, an identifier written in a gitignored file, a typo inside the guard's own fixture
 file. The sharpest one is a gap in **CI's own path filters** — a `BR-nnn` added under
 `scripts/`, `clients/`, `infra/` or the repository root reaches the local check but not the
 CI one, so it merges green and surfaces on somebody else's pull request. That is written down
 as a known gap with its cause and its fix, rather than left for the next person to rediscover
-as a mystery.
+as a mystery. [Chapter 10](10-guards.md) collects every guard in the project the same way.
 
 ## Documentation is routed, and the router is enforced
 
@@ -209,4 +209,4 @@ spend.
 
 ---
 
-[← engineering process](08-engineering-process.md) · [next: roadmap →](10-roadmap.md)
+[← engineering process](08-engineering-process.md) · [next: guards →](10-guards.md)

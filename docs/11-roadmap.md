@@ -1,4 +1,4 @@
-# 10 · Roadmap
+# 11 · Roadmap
 
 [← back to the overview](../README.md)
 
@@ -81,4 +81,4 @@ Decided, not specified.
 
 ---
 
-[← governance](09-governance.md) · [back to the overview](../README.md)
+[← guards](10-guards.md) · [back to the overview](../README.md)

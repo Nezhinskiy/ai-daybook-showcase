@@ -32,7 +32,7 @@ Three of those deserve comment rather than celebration.
 something that feels like a chat. The cause is structural and known: the router is on the
 critical path for *every* message, so the floor is two sequential model calls plus tool
 execution before a word comes back. That is precisely the cost
-[deterministic evidence orchestration](10-roadmap.md#direction) is designed to remove — the
+[deterministic evidence orchestration](11-roadmap.md#direction) is designed to remove — the
 roadmap item exists because of this number, not the other way round.
 
 **The correction rate is the encouraging one.** 225 corrections against 317 meals means

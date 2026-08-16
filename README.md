@@ -68,8 +68,9 @@ copied verbatim, readable in twenty minutes.
 
 ## Read on
 
-If you read two, read **02** and **06**. If you read one thing, read
-[the evidence](docs/EVIDENCE.md).
+If you read one thing, read [the evidence](docs/EVIDENCE.md). If you read two chapters, read
+**02** and **06** — or **09** and **10** if what you are hiring for is the person who keeps a
+codebase honest rather than the person who designs the agent loop.
 
 | | |
 |---|---|
@@ -82,7 +83,8 @@ If you read two, read **02** and **06**. If you read one thing, read
 | [07 · Operations](docs/07-operations.md) | Deploy, rollback, observability, cost ledger |
 | [08 · Engineering process](docs/08-engineering-process.md) | How the work is directed and verified |
 | [09 · Governance](docs/09-governance.md) | The rules the codebase enforces on itself |
-| [10 · Roadmap](docs/10-roadmap.md) | What is shipped, and what deliberately is not |
+| **[10 · Guards](docs/10-guards.md)** | Every automated check, and the incident behind each one |
+| [11 · Roadmap](docs/11-roadmap.md) | What is shipped, and what deliberately is not |
 
 <details>
 <summary><b>Stack</b></summary>
