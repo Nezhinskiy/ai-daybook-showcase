@@ -168,6 +168,14 @@ Four things are assembled, and each is bounded on purpose:
   load leaves its section out rather than failing the run. A food decision gets recent
   product usage; a correction gets the recent records that could plausibly be the target,
   so "change that" resolves without a lookup round trip.
+
+  The reply-language block is the small one worth reading, because of how it was added. It
+  names the user's resolved language and then draws a line: write your own text in it —
+  assistant messages, questions, reminder text — and **do not translate the names the user
+  gave**, because a meal or item title is recorded verbatim whatever script it was in. When
+  no language is resolved the block renders *nothing at all*, which keeps the composed prompt
+  byte-identical to the build that predates it. A feature that changes behavior only for the
+  users it applies to needs no migration and no regression sweep for everyone else.
 - **Tool schemas** — only the tools in the bundle. This is why the guard is the second line
   of defence rather than the first: an unlisted tool is not described to the model at all.
 - **Conversation history, bounded** — the router receives explicitly pinned targets plus ten
