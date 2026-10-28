@@ -22,36 +22,51 @@ That is sequencing, not neglect: capture was built first because a missing scree
 recoverable and a missing record is not. Everything logged through chat is queryable and
 auditable today; it is simply not yet drawn.
 
-- **Notes in the Mini App.** A list and detail surface with tags, the note→task affordance,
-  and soft delete. The endpoint shape is the small part; how notes, inventory, and memory
-  coexist in one navigation is the real question.
+- **Notes in the Mini App** *(next)*. A list and detail surface with tags, the note→task
+  affordance, and soft delete. The endpoint shape is the small part; how notes, inventory, and
+  memory coexist in one navigation is the real question.
 - **Journal and CBT read views**, after notes. Capture stays chat-only by design — silent
   capture is a product decision, not a missing screen.
-- **Read surfaces for nutrition and recipes.** Records that exist and are queryable but are
-  not drawn anywhere.
+- **A public demo entry point** *(next)*. The fixture-only build is already public; what is
+  missing is a short `/demo` address and a gate that keeps the 375-wide layout off desktop.
+
+## Moved out since the previous revision
+
+Now in code at the pin. Described in [chapter 01](01-product.md): Food Product Identity v2
+(the recently used product window, per-item and package cards, taps that edit the original
+reply, merge and detach); saved-product, cooked-dish and recipe cards in the Mini App, which
+retire the old "nutrition and recipes are not drawn anywhere" entry; first-run onboarding; the
+router's card for a photo it cannot place. Described in [chapter 05](05-data-model.md): the
+destructive food-schema contraction that gated the identity work, which removes the old
+S1–S5 entry here (S3–S5 were superseded by v2 rather than built). Also shipped: the macOS
+screen-time connector's install command, typed observations of the QR codes and printed
+links on a photo, and a pgvector-enabled Postgres image in every environment, which no table
+uses yet.
 
 ## Designed
 
 A written design or plan exists; no code does.
 
-- **Food product identity, slices S1–S5** — a seven-document program covering per-user
-  identity beyond product codes: usage bindings, a lexical shadow index, semantic
-  calibration, and resolution UX. **S0, deterministic product-code binding, shipped in
-  August 2026**; S1–S5 have no implementation plan and nothing in code or migrations, and are
-  gated behind a destructive schema contraction that has not started. The roadmap states that
-  gate as a table of five checkpoints with the evidence that each has not begun — an absent
-  migration file, an absent workflow file, three columns still mapped in the ORM — rather
-  than as a status word.
+- **Links on food packaging, slice S-C** — a minimal browsing service and a FoodAgent tool
+  that opens a package's link only when the photo's own data are not enough. It reads
+  schema.org markup first with a schema-bound model extraction as fallback, follows at most
+  three hops under a time budget, and hands the agent extracted fields, never page text. The
+  router never fetches. The first two slices (the routing card and the link observations it
+  reads) are in code; this one has an approved plan.
+- **Journal J2–J5** — J2-a, three embedding tables on the now-deployed pgvector image, is next
+  and gates semantic note search. Then coping rules with cue matching, an anti-rumination
+  cooldown, relapse-passport trajectory matching, cross-domain correlations, behavioral
+  activation, a session-mode therapist agent, and a decision journal with calibration review.
+- **Structured training** — strength and other sports as first-class records: a shared
+  exercise catalogue with a per-user overlay, per-set load, a quiet live session with a
+  deterministic fast path, and progress and muscle-balance views, owned by a new
+  TrainingAgent. The design exists; it is to be re-planned against the shipped product
+  identity work before any plan is written.
 - **Rare router clarification and context-preserving continuations** — one categorical router
   abstention plus durable continuations, layered over the already-shipped inline questions
   and durable conversation context.
-- **Journal J2–J5** — pgvector infrastructure and three embedding tables (which gate semantic
-  note search), guided CBT breakdown, relapse-passport trajectory matching, cross-domain
-  correlations, behavioral activation, a session-mode therapist agent, and a decision journal
-  with calibration review.
-- **Connector distribution** — PyInstaller bundles, signing and notarization, a release
-  workflow, bootstrap installers. The install endpoints return 404 until both plans land,
-  which is why the connector is not presented as available.
+- **Windows connector installer** — the macOS install command is shipped; a PowerShell
+  bootstrap and a scheduled task remain for Windows.
 - **iPhone screen time** — transport, Wi-Fi places, and workout episodes are shipped;
   app-open and app-close events into screen blocks are not.
 - **Expiry reminders** — wiring `expires_at` into the actionable-reminder system.
@@ -76,8 +91,8 @@ Decided, not specified.
 - **Geolocation places**, superseding Wi-Fi-only detection so a place resolves without a
   known network in range.
 - **One-tap Shortcuts installation** from the Shortcuts library.
-- Episode debugging views · `workout_log` sets-and-reps promotion · charting and correlation
-  analytics · code-defined alerting (Sentry captures today, it does not alert).
+- Episode debugging views · charting and correlation analytics · code-defined alerting
+  (Sentry captures today, it does not alert).
 
 ---
 

@@ -52,7 +52,8 @@ def validate_readonly_sql(sql: str) -> str:
     """Validate ``sql`` is a single user-scoped read; return the normalized SQL.
 
     Rejects (raising ``ReadonlySqlError``): empty / multi-statement input, any
-    write or admin command, non-SELECT top nodes, ``SELECT ... INTO``, references
+    write or admin command, non-SELECT top nodes, ``SELECT ... INTO``, a row-locking
+    clause (``FOR UPDATE`` / ``FOR SHARE``) in any position, references
     to base tables outside the view allow-list, schema/catalog-qualified or quoted
     identifiers resolving to disallowed tables, and any function (typed or anonymous)
     whose canonical name is outside the analytical allow-list.
@@ -74,6 +75,10 @@ def validate_readonly_sql(sql: str) -> str:
         raise ReadonlySqlError("only SELECT / WITH ... SELECT is allowed")
     if tree.find(exp.Into) is not None:
         raise ReadonlySqlError("SELECT ... INTO is not allowed")
+    # FOR UPDATE / FOR SHARE anywhere, a subquery or an EXISTS body included: the read-only
+    # transaction refuses them too, but this layer must not lean on that one (BR-351).
+    if tree.find(exp.Lock) is not None:
+        raise ReadonlySqlError("row-locking clause not allowed")
 ```
 
 <sub>`src/app/db/effects/readonly_sql.py`</sub>
@@ -91,23 +96,31 @@ pass**.
 ## Layer 2 — the role physically cannot write
 
 The validated query executes over a dedicated read-only Postgres role, against an
-allow-list of views rather than base tables, under a statement timeout and a row cap. Not
-"the code does not issue writes" — the connection has no write privilege. The worst-case
-outcome of a maliciously generated query is a failed read.
+allow-list of views rather than base tables, inside a `SET TRANSACTION READ ONLY`
+transaction, under a statement timeout and a row cap. Not "the code does not issue writes" —
+the connection has no write privilege. The worst-case outcome of a maliciously generated
+query is a failed read.
+
+Each layer is expected to hold on its own. When a review found that the parser admitted
+`FOR UPDATE` — harmless in practice, because the read-only transaction refuses it — the fix
+was still a parser rule, recorded as BR-351: a layer that leans on the one beneath it is not
+a layer.
 
 ## Layer 3 — row-level security
 
-The system is multi-tenant: every row carries a `user_id`, and the analytical role runs
-under Postgres row-level security. A query can only ever see the asking user's rows, **even
-if the parser were bypassed entirely**.
+The system is multi-tenant. Every base table on the analytical read surface carries its own
+`user_id`, and the analytical role runs under Postgres row-level security keyed on it. A
+query can only ever see the asking user's rows, **even if the parser were bypassed
+entirely**. Not every table in the schema has the column — some child tables reach their
+owner through a parent — and none of those is readable on this path.
 
 This is why the guard is genuine defence in depth rather than three names for one check. To
 read another user's data an attacker would need to defeat a SQL parser, a Postgres role
 grant, and an RLS policy simultaneously. To write anything, they would additionally need a
 privilege the connection does not hold.
 
-RLS is also why a schema change is not just a migration here. When a junction table becomes
-readable, it needs its own direct `user_id` — not merely a foreign-key path to a parent —
+RLS is also why a schema change is not just a migration here. Before a table becomes
+readable, it gains its own direct `user_id` — not merely a foreign-key path to a parent —
 because the policy has to be expressible on the table itself. That house rule exists because
 the alternative silently produces tables the policy cannot protect.
 
@@ -142,7 +155,7 @@ def _function_name(func: exp.Func) -> str:
     return func.sql_name().lower()
 ```
 
-<sub>[`code/src/app/db/effects/readonly_sql.py:242`](../code/src/app/db/effects/readonly_sql.py)</sub>
+<sub>[`code/src/app/db/effects/readonly_sql.py:293`](../code/src/app/db/effects/readonly_sql.py)</sub>
 
 The failure mode is the dangerous kind: an allow-list that has silently stopped
 discriminating still passes every test written against the functions you remembered to name.
@@ -150,6 +163,17 @@ Canonicalization also runs the other way — `version()` canonicalizes to `curre
 `date_trunc` to `timestamp_trunc` — so the allow-list holds canonical forms and the rejection
 message names the canonical form, not what was typed. [See it
 reject](EVIDENCE.md#5-the-sql-validator-exercised).
+
+The same seam later failed in the other direction. A sqlglot upgrade redeclared `AND` and `OR`
+as subclasses of `exp.Func`, so the walk began name-checking the boolean connectors and
+rejected every multi-predicate query with `function not allowed: and` (BR-232). It failed
+closed, which is the safe way to fail, but QueryAgent could no longer answer most real
+questions — and CI stayed green, because 62 validator tests contained not one `AND`. The fix
+skips the connector node *type* rather than allow-listing the names `and` and `or`: a
+connector can only serialize back as an operator, while an allow-listed name would admit an
+anonymous function that happens to be called `and`. A structural test now pins the exempt set
+to exactly `{And, Or, Xor}`, so the next library release that moves a callable under
+`Connector` fails a test instead of silently widening the boundary.
 
 Rejection messages name the rule that fired, so a refusal is diagnosable — which matters
 because the person debugging it is looking at a query a model wrote and they have never seen

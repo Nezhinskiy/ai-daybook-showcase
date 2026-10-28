@@ -5,7 +5,7 @@
 This is a solo-built system. That makes the process question sharper rather than softer:
 with no reviewer to catch you, the discipline has to be structural, or it does not exist.
 
-**227 design and plan documents** sit behind the code. Not as ceremony — as the mechanism
+**305 design and plan documents** sit behind the code. Not as ceremony — as the mechanism
 that makes the next decision cheaper than the last.
 
 ## Design before plan before code
@@ -19,8 +19,12 @@ job:
    test cycles written out.
 3. **Implementation** — task by task, tests first.
 4. **Review** — an adversarial pass over the diff, with findings reproduced before they are
-   acted on.
-5. **Eval gate** — the merge barrier described in [chapter 06](06-quality.md).
+   acted on. A plan, or a fix that closes a ledger entry, is read through three lenses: the
+   plan against the code, the plan against the bug's own evidence, and each test against
+   where its inputs came from. Only the first tends to happen unprompted; the other two are
+   written down because one branch passed two review rounds with a classifier stricter than
+   the evidence it was built on.
+5. **Eval gate** — a real-model run of the changed agent's suite before the change is pushed; a local rule, not a CI step, described in [chapter 06](06-quality.md#the-gate).
 
 Specs and plans are **historical evidence**, deliberately not rewritten to match what the
 code became. When implementation deviates from a spec, the deviation is recorded as an
@@ -31,10 +35,11 @@ point rather than what turned out to be true.
 
 One fact has one authoritative home; everything else links to it. Phase status lives in the
 roadmap, contracts in the architecture documents, procedures in runbooks, decisions in
-specs, defects in bug reports, eval freshness in generated status.
+ADRs and specs, defects in the bug ledger, structural debt in the debt ledger, eval
+freshness in generated status.
 
 The always-loaded index carries hard budgets — 300 lines, 3,000 words — enforced by a guard
-in CI, along with the existence of every file it links to. The budget is what forces detail
+in CI, along with the existence of every local file it links to. The budget is what forces detail
 into the document that owns it — see [chapter 09](09-governance.md#documentation-is-routed-and-the-router-is-enforced).
 
 This is not a preference about tidiness. Context is finite, and a knowledge base that repeats
@@ -42,7 +47,7 @@ itself produces contradictory status.
 
 ## Defects get written down before they get fixed
 
-**141 entries**, one file each, with the index generated from them. Each carries the symptom,
+**436 entries**, one file each, with the index generated from them. Each carries the symptom,
 the production evidence that localized it, the exact seam at fault, and the fix commit or pull
 request — [four of them are reproduced in full](EVIDENCE.md#7-four-defects-unabridged). The
 tooling that validates them is [chapter 09](09-governance.md#the-defect-ledger-is-a-program-not-a-file).
@@ -62,7 +67,18 @@ Three rules govern the file, and each was written after the absence of it cost s
   citing nothing.
 
 The third rule is the transplantable one: the process noticed that it had produced a false
-coverage claim, and closed that specific hole.
+coverage claim, and closed that specific hole. A fourth followed from the same instinct: a
+high-severity entry must fill a line headed **What this evidence does not establish**, and
+the ledger check rejects it empty. It is the field that stops a later plan inheriting a
+silence as a premise.
+
+Structural debt gets the same treatment in a ledger of its own. Debt a change creates or
+finds and does not fix becomes an entry in that change, and the pull request cites its
+`TD-nnn` instead of listing "follow-ups". Each entry carries a **gate** — when closing it is
+cheapest — and the check enforces the gates: an entry whose blockers have all closed must be
+re-gated, and an entry naming a file that no longer exists fails the change that moved it.
+One gate, `window`, groups cleanups by the agents whose paid real-model evidence they would
+invalidate, so they ride an eval run that is being paid for anyway instead of forcing one.
 
 The habit all three enforce: **reproduce before you act.** A finding from a review, a static
 analyzer, or another agent is a hypothesis until it is reproduced.
@@ -73,7 +89,7 @@ Much of this system was built with AI assistance. The interesting part is not th
 it is what had to be true for that to produce something trustworthy.
 
 Start with the number a reader will otherwise compute themselves and frame however they
-like: **4,117 commits and 270 merged pull requests in 93 days**, one author. Roughly forty-four
+like: **8,913 commits and 620 merged pull requests in 163 days**, one author. Roughly fifty-five
 commits a day. That rate is not evidence of anything on its own — it is the reason every
 mechanism in [chapter 09](09-governance.md) exists, because a boundary nobody checks erodes
 in weeks at that speed, and a review pass by the person writing the change is not a check.
@@ -81,8 +97,9 @@ in weeks at that speed, and a review pass by the person writing the change is no
 Every guard in [chapter 04](04-security.md) and every gate in [chapter 06](06-quality.md) is
 a mechanism for not trusting an assertion — including the model's, and including mine. The
 eval gate does not care who wrote the change. The capability guard does not care how
-confident the decision was. `mypy --strict` over tests catches a test that asserts nothing
-just as readily whether a human or a model wrote it.
+confident the decision was. And a new or preserved assertion ships with the mutation that
+turns it red — the first break tried is the base revision itself — or with a sentence saying
+why none exists, whoever wrote the test.
 
 Concretely, this means:
 
@@ -90,7 +107,9 @@ Concretely, this means:
   167-string translation across two locales — the specification is a test that walks the
   result and fails on any Cyrillic, not a checklist that someone promises to have followed.
 - **Findings are reproduced, not relayed.** A reviewer's claim gets verified before it is
-  repeated, let alone acted on.
+  repeated, let alone acted on. The same applies to prose arguing why a change is safe — a
+  comment, a ledger entry, a pull-request body: it is a claim about the code, so it is
+  executed before it is written.
 - **Flakes are attributed with an A/B against a stashed baseline**, not by rerunning until
   green. Repetition alone does not distinguish "my change broke it" from "this host is
   loaded" — a controlled comparison does.
@@ -108,8 +127,8 @@ The system in this repository orchestrates agents. So does the process that buil
 artifact is checkable: the implementation plans are written to **fan out across parallel
 agents**, and the merge commits carry the lane names.
 
-The most recent one — deterministic product-code binding, twelve tasks — opens with a
-dependency graph rather than a task list:
+One of them — deterministic product-code binding, twelve tasks — opens with a dependency
+graph rather than a task list:
 
 ```text
 Wave 1 (4 lanes, fully parallel)

@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Sequence
 
 from app.agents.capability.resolve import ResolvedPlan
-from app.agents.common.units import UNIVERSAL_ACTION_KINDS
 from app.contracts import PlannedToolCall
 
 
 def capability_guard_rejection(
-    actions: list[Any],
-    planned_tool_calls: list[PlannedToolCall],
+    actions: Sequence[object],
+    planned_tool_calls: Sequence[PlannedToolCall],
     resolved: ResolvedPlan,
     *,
     allow_empty: bool = False,
@@ -18,11 +17,19 @@ def capability_guard_rejection(
 
     ``allow_empty=True`` (set by agents whose schema permits zero actions, e.g. the
     analyzer's "already asked, nothing to close yet" run) skips the empty-plan rejection.
+
+    ``actions`` is deliberately ``Sequence[object]`` rather than a protocol that promises
+    ``kind``: this is the fail-closed boundary between a model's decision and the effect
+    layer, and its job is to *prove* the shape rather than assume it. Declaring the
+    attribute in the signature would move the missing-attribute case from a rejection code
+    to an ``AttributeError`` at exactly the point where the decision is least trustworthy.
+    ``object`` keeps the structural check meaningful while keeping ``Any`` — which switches
+    type checking off for whatever flows through it — off the security path.
     """
     if not actions:
         return None if allow_empty else "empty_actions"
 
-    allowed_actions = set(resolved.action_kinds) | UNIVERSAL_ACTION_KINDS
+    allowed_actions = set(resolved.action_kinds)
     for action in actions:
         kind = getattr(action, "kind", None)
         if not isinstance(kind, str) or kind not in allowed_actions:

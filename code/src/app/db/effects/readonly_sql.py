@@ -19,7 +19,13 @@ analytical allow-list: we walk all ``exp.Func`` nodes (the base class covering b
 sqlglot's typed function nodes — e.g. ``exp.Count``, ``exp.Cast`` — and the
 ``exp.Anonymous`` fallback for unrecognized names) and reject any whose canonical
 name is not allow-listed, so functions like ``version()`` or ``pg_read_file(...)``
-never pass regardless of how sqlglot models them.
+never pass regardless of how sqlglot models them. The exceptions are syntax nodes that
+sqlglot happens to model as ``exp.Func``: ``exp.Connector`` (AND/OR/XOR, since sqlglot
+30.x), ``CASE`` (``exp.Case`` and its ``exp.If`` branches) and an ``EXISTS`` over a
+subquery. They are skipped because none has a callable surface to gate; each re-serializes
+as syntax even when written as a call, and their operands stay name-gated —
+see the comment on the walk itself for why skipping the node type is narrower than
+allow-listing the names.
 
 Parser validation is necessary but not sufficient. The execution path layers, as
 defense in depth: scope-aware parser allow-list + user-scoped view CTEs (column
@@ -45,9 +51,6 @@ from sqlglot.optimizer.scope import traverse_scope
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 100
-# Fallback per-statement timeout (ms) when no caller/settings value is supplied.
-# The live default is settings-configurable via Settings.readonly_sql_statement_timeout_ms.
-STATEMENT_TIMEOUT_MS = 2000
 READONLY_TRANSACTION_SQL = "SET TRANSACTION READ ONLY"
 
 # Every function node is gated against this allow-list by canonical name (see
@@ -110,10 +113,35 @@ READONLY_VIEW_DEFS: tuple[ReadonlyView, ...] = (
         "meals",
         # Scalar analytics columns only: document columns would let one guarded
         # ``SELECT *`` stream MAX_LIMIT provenance blobs into the decision prompt.
+        # Which batches a meal was eaten from is `query_meal_recipe_batches`, not a column
+        # here: a meal can hold several batches, and a batch eaten with anything else is a
+        # composition link no single meal column named (BR-285).
         "SELECT id, title, raw_input, calories, protein_g, fat_g, carbs_g, "
-        "recipe_batch_id, portion_quantity_value, portion_quantity_unit, portion_weight_g, "
+        "portion_quantity_value, portion_quantity_unit, "
         "nutrition_confidence, eaten_at, meal_date, created_at "
         "FROM meals WHERE user_id = :user_id AND deleted_at IS NULL",
+    ),
+    ReadonlyView(
+        "query_meal_recipe_batches",
+        "meal_recipe_batches",
+        # One row per (meal, batch) with that batch's portion in the meal. Junction views
+        # JOIN BOTH sides: a deleted meal or batch hides the link, so no link names a batch
+        # `query_recipe_batches` cannot title; both joins carry the user-consistency guard.
+        "SELECT mb.meal_id, mb.recipe_batch_id, mb.link_kind, mb.portion_quantity_value, "
+        "mb.portion_quantity_unit, mb.created_at "
+        "FROM meal_recipe_batches mb "
+        "JOIN meals m ON mb.meal_id = m.id AND m.user_id = mb.user_id "
+        "JOIN recipe_batches b ON mb.recipe_batch_id = b.id AND b.user_id = mb.user_id "
+        "WHERE mb.user_id = :user_id "
+        "AND m.deleted_at IS NULL AND b.deleted_at IS NULL",
+    ),
+    ReadonlyView(
+        "query_recipe_batches",
+        "recipe_batches",
+        # Scalar columns only, as for query_meals: no composition or provenance documents.
+        "SELECT id, title, cooked_at, total_quantity_value, total_quantity_unit, "
+        "calories, protein_g, fat_g, carbs_g, created_at "
+        "FROM recipe_batches WHERE user_id = :user_id AND deleted_at IS NULL",
     ),
     ReadonlyView(
         "query_activities",
@@ -139,8 +167,22 @@ READONLY_VIEW_DEFS: tuple[ReadonlyView, ...] = (
     ReadonlyView(
         "query_tasks",
         "tasks",
-        "SELECT id, title, description, task_type, status, due_at, created_at "
+        "SELECT id, title, description, task_type, status, due_at, completed_at, created_at "
         "FROM tasks WHERE user_id = :user_id AND deleted_at IS NULL",
+    ),
+    # BR-413: the two planning kinds no view carried, so an aggregate over the schedule or
+    # the shopping list ("how many meetings this month") had no table to read.
+    ReadonlyView(
+        "query_calendar_events",
+        "calendar_events",
+        "SELECT id, title, starts_at, ends_at, status, created_at "
+        "FROM calendar_events WHERE user_id = :user_id AND deleted_at IS NULL",
+    ),
+    ReadonlyView(
+        "query_purchases",
+        "purchases",
+        "SELECT id, title, status, quantity, budget_amount, purchased_at, created_at "
+        "FROM purchases WHERE user_id = :user_id AND deleted_at IS NULL",
     ),
     ReadonlyView(
         "query_journal_entries",
@@ -222,8 +264,17 @@ READONLY_VIEW_DEFS: tuple[ReadonlyView, ...] = (
     ),
 )
 
+
 # Derived surfaces — never hand-maintained in parallel.
 READONLY_VIEWS: dict[str, str] = {v.name: v.select_sql for v in READONLY_VIEW_DEFS}
+# The per-view *column* surface is derived in test support, not here. Nothing on the
+# execution path parses a view definition: `_scoped_query` interpolates each `select_sql`
+# into a CTE verbatim, and `validate_readonly_sql` parses the *model's* statement while
+# allow-listing view names. Deriving the columns here put ~2.5 ms of `sqlglot` parsing into
+# every import of this module — the read-only-SQL security boundary — to build a mapping the
+# boundary never consults. `tests/db/effects/test_readonly_sql.py` derives it from
+# `READONLY_VIEW_DEFS` above, which is the same input and therefore the same guarantee
+# against drift.
 # Base tables in declaration order, de-duplicated (a table may back >1 view).
 RLS_TABLES: tuple[str, ...] = tuple(dict.fromkeys(v.base_table for v in READONLY_VIEW_DEFS))
 
@@ -273,7 +324,8 @@ def validate_readonly_sql(sql: str) -> str:
     """Validate ``sql`` is a single user-scoped read; return the normalized SQL.
 
     Rejects (raising ``ReadonlySqlError``): empty / multi-statement input, any
-    write or admin command, non-SELECT top nodes, ``SELECT ... INTO``, references
+    write or admin command, non-SELECT top nodes, ``SELECT ... INTO``, a row-locking
+    clause (``FOR UPDATE`` / ``FOR SHARE``) in any position, references
     to base tables outside the view allow-list, schema/catalog-qualified or quoted
     identifiers resolving to disallowed tables, and any function (typed or anonymous)
     whose canonical name is outside the analytical allow-list.
@@ -295,6 +347,10 @@ def validate_readonly_sql(sql: str) -> str:
         raise ReadonlySqlError("only SELECT / WITH ... SELECT is allowed")
     if tree.find(exp.Into) is not None:
         raise ReadonlySqlError("SELECT ... INTO is not allowed")
+    # FOR UPDATE / FOR SHARE anywhere, a subquery or an EXISTS body included: the read-only
+    # transaction refuses them too, but this layer must not lean on that one (BR-351).
+    if tree.find(exp.Lock) is not None:
+        raise ReadonlySqlError("row-locking clause not allowed")
 
     # Reject recursive CTEs outright: the agent never needs them and they are an
     # unbounded-work vector. `exp.With(recursive=True)` carries the flag.
@@ -323,12 +379,50 @@ def validate_readonly_sql(sql: str) -> str:
     # alike — by canonical name. ``exp.Func`` is the base class covering both, so a
     # single walk closes the gap where typed nodes (``version()``, ``current_user``,
     # ``generate_series(...)``, ``md5(...)``) previously bypassed the allow-list.
+    #
+    # ``exp.Connector`` nodes are skipped: they are the boolean operators AND/OR/XOR,
+    # not callable functions. sqlglot 25.x declared ``class And(Connector)``, but 30.x
+    # declares ``class And(Expression, Connector, Func)``, which silently pulled every
+    # connector into this walk and made the gate reject any multi-predicate statement
+    # ("function not allowed: and") — every real analytical question QueryAgent asks.
+    # ``continue`` (not ``prune``) is deliberate: ``find_all`` keeps descending, so the
+    # operands of a connector are still name-gated.
+    #
+    # Skipping the node *type* rather than allow-listing the names "and"/"or" is what
+    # keeps this from widening the boundary. A connector can only ever serialize back as
+    # boolean operators, never as a call: sqlglot parses even an explicit ``"and"(1, 2)``
+    # into ``exp.And``, which re-renders as ``1 AND 2``, and the call form ``xor(a, b)``
+    # into ``exp.Xor``, which re-renders as its ``AND``/``NOT``/``OR`` expansion rather
+    # than as itself. ``validate_readonly_sql`` returns that re-serialized tree, so no
+    # exempted node can put a call on the execution path. Allow-listing the names instead
+    # would admit an ``exp.Anonymous`` merely named "and".
+    #
+    # ``CASE`` and ``EXISTS`` are skipped on the same terms (BR-233): sqlglot models them as
+    # ``exp.Case`` (plus one ``exp.If`` per ``WHEN`` branch) and ``exp.Exists``, all ``exp.Func``
+    # subclasses, yet they are control flow and a subquery predicate, not calls. As with the
+    # connectors, ``continue`` keeps every operand name-gated. The call forms that parse into
+    # these nodes cannot emit a call either: ``if(...)``/``iif(...)`` render as ``CASE WHEN``,
+    # and a ``"case"(...)`` call yields a malformed ``exp.Case`` whose serialization raises,
+    # which the ``tree.sql`` guard below turns into a rejection. ``EXISTS`` is exempt only over
+    # a single query; ``"exists"(1)`` is not the predicate, and a second argument (which
+    # serialization would silently drop) is not either, so both stay gated by name.
     for func in tree.find_all(exp.Func):
+        if isinstance(func, (exp.Connector, exp.Case, exp.If)):
+            continue
+        if (
+            isinstance(func, exp.Exists)
+            and isinstance(func.this, exp.Query)
+            and func.args.get("expression") is None
+        ):
+            continue
         fname = _function_name(func)
         if fname not in _ALLOWED_FUNCTIONS:
             raise ReadonlySqlError(f"function not allowed: {fname}")
 
-    return tree.sql(dialect="postgres")
+    try:
+        return tree.sql(dialect="postgres")
+    except Exception as exc:  # fail closed: a tree sqlglot cannot render never executes
+        raise ReadonlySqlError(f"unserializable statement: {type(exc).__name__}") from exc
 
 
 def _bounded_limit(limit: int | None) -> int:
@@ -386,4 +480,28 @@ async def run_user_scoped_readonly_sql(
         {"uid": str(user_id)},
     )
     result = await session.execute(text(wrapped))
-    return [dict(row) for row in result.mappings().all()]
+    # Postgres names every unaliased aggregate alike (`sum`, `count`): keyed by name, a row kept
+    # only the last of them, so a second `SUM(...)` silently replaced the first.
+    names = _distinct_column_names(list(result.keys()))
+    return [dict(zip(names, row, strict=True)) for row in result.all()]
+
+
+def _distinct_column_names(names: list[str]) -> list[str]:
+    """``names`` with each repeat suffixed ``_2``, ``_3``…, skipping a name already taken."""
+
+    taken = set(names)
+    seen: dict[str, int] = {}
+    distinct: list[str] = []
+    for name in names:
+        count = seen.get(name, 0) + 1
+        seen[name] = count
+        if count == 1:
+            distinct.append(name)
+            continue
+        suffix = count
+        while f"{name}_{suffix}" in taken:
+            suffix += 1
+        candidate = f"{name}_{suffix}"
+        taken.add(candidate)
+        distinct.append(candidate)
+    return distinct

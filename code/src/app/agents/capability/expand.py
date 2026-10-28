@@ -5,6 +5,8 @@ from collections.abc import Iterable
 from app.agents.capability.model import dedupe_by_identity
 from app.agents.capability.plan import CapabilityPlan
 from app.agents.capability.registry import INTENT_BUNDLES
+from app.agents.common.context_blocks import TimeContext
+from app.agents.common.units import UNIVERSAL_ACTIONS
 from app.domain_values import Intent, domain_of_intent
 
 # No pre-rendered unsupported-intent message lives here. Its one consumer
@@ -13,15 +15,19 @@ from app.domain_values import Intent, domain_of_intent
 # render time instead. A module-level constant here could only pin one language.
 
 
-def _ask_user_only_plan(intent: Intent) -> CapabilityPlan:
+def _universal_only_plan(intent: Intent, *, has_media: bool) -> CapabilityPlan:
+    """The plan for an intent with no bundle: the universal actions and nothing else."""
+    actions = [action for action in UNIVERSAL_ACTIONS if _keep(action.requires_media, has_media)]
     return CapabilityPlan(
         domain=domain_of_intent(intent),
         intent=intent,
         skill_fragments=[],
-        allowed_action_kinds=["ask_user"],
-        allowed_effect_tools=["ask_user"],
+        allowed_action_kinds=[action.kind for action in actions],
+        allowed_effect_tools=_dedupe_values(
+            effect_tool.name for action in actions for effect_tool in action.effect_tools
+        ),
         read_tools=[],
-        context_blocks=["time"],
+        context_blocks=[TimeContext.name],
     )
 
 
@@ -40,10 +46,25 @@ def is_supported_intent(intent: Intent) -> bool:
     return intent in INTENT_BUNDLES
 
 
+def intent_reaches_effect_tool(intent: Intent, tool_name: str) -> bool:
+    """Whether a turn routed to *intent* can express a call to *tool_name*.
+
+    Answered off the expanded plan rather than a list of intents, so a capability added to
+    or removed from a bundle changes the answer with nothing else edited. ``has_media`` is
+    ``False`` because the caller this exists for is a post-commit card's tap, which
+    re-enters on the clarification's stored intent carrying no attachment — the narrowest
+    plan that turn can get, and therefore the honest one to promise against.
+
+    A card offering to hand the user back to an agent that has no action for the fix is
+    worse than no card, so a materializer asks this before emitting one.
+    """
+    return tool_name in expand_intent(intent, has_media=False).allowed_effect_tools
+
+
 def expand_intent(intent: Intent, *, has_media: bool) -> CapabilityPlan:
     bundle = INTENT_BUNDLES.get(intent)
     if bundle is None:
-        return _ask_user_only_plan(intent)
+        return _universal_only_plan(intent, has_media=has_media)
 
     caps = [
         capability
@@ -72,6 +93,17 @@ def expand_intent(intent: Intent, *, has_media: bool) -> CapabilityPlan:
                 action
                 for action in bundle.intent_write_actions
                 if _keep(action.requires_media, has_media)
+            ),
+            # Universal actions go last: no bundle lists them, and the plan's action order
+            # is the schema's arm order.
+            *(
+                ()
+                if bundle.omit_universal_actions
+                else (
+                    action
+                    for action in UNIVERSAL_ACTIONS
+                    if _keep(action.requires_media, has_media)
+                )
             ),
         ]
     )

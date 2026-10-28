@@ -37,7 +37,10 @@ flowchart TD
 
 **The router does not solve anything.** It splits a mixed message into fragments, preserves
 each verbatim, assigns any attached media to the right fragment, and emits one
-domain-qualified `Intent` per fragment. It never writes.
+domain-qualified `Intent` per fragment. It never writes. A route may also declare which earlier
+question it answers, or which earlier turn it corrects, so a typed answer reaches the asking
+agent without the user having to use Telegram's reply gesture; the workflow binds that
+declaration to a delivered message before the route runs, rather than trusting the label.
 
 **Pure code expands the intent into a plan.** No model involvement. The expansion is a
 lookup over the typed object graph, and it produces a `CapabilityPlan`:
@@ -110,8 +113,8 @@ This is the load-bearing piece, and it is deliberately small enough to read in f
 
 ```python
 def capability_guard_rejection(
-    actions: list[Any],
-    planned_tool_calls: list[PlannedToolCall],
+    actions: Sequence[object],
+    planned_tool_calls: Sequence[PlannedToolCall],
     resolved: ResolvedPlan,
     *,
     allow_empty: bool = False,
@@ -120,7 +123,7 @@ def capability_guard_rejection(
     if not actions:
         return None if allow_empty else "empty_actions"
 
-    allowed_actions = set(resolved.action_kinds) | UNIVERSAL_ACTION_KINDS
+    allowed_actions = set(resolved.action_kinds)
     for action in actions:
         kind = getattr(action, "kind", None)
         if not isinstance(kind, str) or kind not in allowed_actions:
@@ -135,7 +138,10 @@ def capability_guard_rejection(
 ```
 
 <sub>[`code/src/app/agents/common/guard.py`](../code/src/app/agents/common/guard.py) · the
-whole file, 36 lines including imports</sub>
+whole function; the file is 43 lines with imports. Its docstring is cut here to the first
+line; the rest explains why `actions` is `Sequence[object]` and not `Any`: this is the
+boundary whose job is to prove the shape, so a missing `kind` must be a rejection code, not
+an `AttributeError`</sub>
 
 A rejection is terminal: `FAILED_TERMINAL`, **no partial writes**. Not a retry, not a
 repair, not a "let me try that again with a stricter prompt". The run ends and the user gets
@@ -143,8 +149,16 @@ a deterministic message. [Watch it reject real
 input](EVIDENCE.md#3-the-guard-exercised).
 
 Two barriers, not one. An action kind can be legitimate while the tool call it carries is
-not, so both are checked — and `UNIVERSAL_ACTION_KINDS` (today just `ask_user`) is a property
-read off the `Action` object, not a special-cased string inside the guard.
+not, so both are checked. The guard reads only the plan: the one universal action, `ask_user`,
+is appended to each plan by `expand_intent` rather than allowed by a special case here, so a
+bundle that opts out of it (the raw-events recorder and analyzer) rejects it like any other
+out-of-plan action.
+
+One normalization runs before the guard. A decision with no actions whose message ends in a
+question mark is coerced onto `ask_user`, so a model that answered conversationally reaches
+the user instead of being discarded as `empty_actions`. A message-only decision that does not
+end in a question, typically "Saved." over an action the model dropped, still fails closed:
+a false success is never forwarded.
 
 Three properties are worth naming:
 
@@ -154,8 +168,10 @@ Three properties are worth naming:
 2. **It is checked before execution, not after.** `planned_tool_calls` are inspected as a
    plan. Nothing has touched the database when the rejection happens, so "no partial
    writes" is a structural fact rather than a rollback.
-3. **An unsupported intent never reaches a model.** It takes a deterministic, no-LLM
-   fallback path and answers without spending a token.
+3. **An unsupported intent never reaches a model.** The dispatcher checks for a bundle
+   before building a plan; without one it answers with a fixed, catalogued message and ends
+   the route `FAILED_TERMINAL` without spending a token. Every intent the router can emit has
+   a bundle today, so this is the path for an intent added without one, not a live branch.
 
 ## What the model actually sees
 
@@ -164,8 +180,12 @@ Four things are assembled, and each is bounded on purpose:
 
 - **Skill fragments** — the domain instructions for this intent specifically, not the whole
   agent's manual. An intent that cannot create a recipe never sees the recipe rules.
-- **Context blocks** — typed, individually resolved, and **fail-soft**: a block that cannot
-  load leaves its section out rather than failing the run. A food decision gets recent
+- **Context blocks** — typed, individually resolved, and **fail-soft**: a block whose
+  renderer raises costs the block, not the turn. Its place in the prompt becomes one line
+  saying it is unavailable and must not be assumed, and the user is told a source could not
+  be checked. A transient database error is the exception: it costs an activity attempt,
+  so Temporal's retry re-renders on a fresh connection, and only the last attempt degrades
+  the block instead. A food decision gets recent
   product usage; a correction gets the recent records that could plausibly be the target,
   so "change that" resolves without a lookup round trip.
 
@@ -182,11 +202,17 @@ Four things are assembled, and each is bounded on purpose:
   global turns; a domain agent receives the same targets plus ten turns it actually
   participated in. Older turns are compacted into structured summaries built from immutable
   revisions with explicit folded membership, so a slow or failed summary degrades into raw
-  overflow rather than a silent gap in what the model knows.
+  overflow rather than a silent gap in what the model knows. That turn-based reader ships
+  behind a read-mode switch with its additive schema in place, and its staged rollout has not
+  started in production, which still reads the older row-based conversation context. The
+  rollout is a chain of reversible checkpoints (dual writes, shadow comparison, a validated
+  cutover report), not one flag.
 
 The context blocks are rendered sequentially against one shared session rather than gathered
 concurrently — an attempt to parallelize them is the obvious optimization and it is the
-wrong one here, because they share the session that scopes them.
+wrong one here, because they share the session that scopes them. Each block runs inside its
+own savepoint, rolled back after every block: a read that fails inside a block that swallows
+its own error would otherwise leave the shared transaction aborted for every block after it.
 
 ## Why typed objects rather than strings
 
@@ -197,8 +223,9 @@ alongside it. Strings appear only at serialization boundaries.
 The practical consequence: a wiring mistake — an action that no agent can emit, a tool
 referenced by a capability that does not exist — fails at import or type-check time. The
 alternative, a string-keyed registry, moves that same mistake to runtime, where it surfaces
-as a `KeyError` in the middle of someone's conversation. With `mypy --strict` and `pyright`
-over both source and tests, the object graph is checked on every commit.
+as a `KeyError` in the middle of someone's conversation. With mypy (every function annotated,
+untyped bodies checked) and pyright run over both source and tests in CI, the object graph is
+checked on every change.
 
 ## Isolation between agents
 

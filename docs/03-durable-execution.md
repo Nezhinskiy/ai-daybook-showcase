@@ -9,11 +9,13 @@ rate-limits at 2am must not turn into silence.
 None of that is agent work, and none of it should be written by hand for each feature.
 **Temporal owns every lifecycle**; the agents decide only what domain work means.
 
-## Twenty workflows, one rule
+## Twenty-four workflows, one rule
 
-Twenty `@workflow.defn` classes cover message handling, agent jobs, reminders, episode
-derivation and interpretation, approvals, conversation summaries, Google OAuth completion,
-inbound reconciliation, and outbound delivery reconciliation.
+Twenty-four `@workflow.defn` classes cover message handling, agent jobs, reminders, episode
+derivation and interpretation, approvals and inline-question callbacks, conversation
+summaries, Google OAuth completion, inbound and outbound delivery reconciliation, and the
+background food work a user never waits on: emoji labelling of saved products, product-code
+catalogue checks, and restating past records after a product's nutrition is corrected.
 
 The rule they share: Temporal controls *when* work runs and guarantees that it eventually
 does. It does not replace the agent, and the agent never manages its own retries, timers, or
@@ -43,9 +45,23 @@ the database is the source of truth.
 
 ## Failing loudly, never silently
 
-Domain, router, vision, and summarizer calls each retry once on a backup provider when the
-primary rate-limits or dies on auth. If no backup is usable, the failure is terminal — and
-the user receives a deterministic, no-LLM notice.
+Router, domain, summarizer, and speech-to-text calls each retry once on a backup provider
+when the primary rate-limits or dies on auth. If no backup is usable, the failure is
+terminal — and the user receives a deterministic, no-LLM notice.
+
+On the subscription-backed CLI provider, the three calls a user waits on (router, domain
+decision, photo recognition) go one step further: a staggered race. A stalled turn looks
+exactly like a slow one until it is too late to retry, so instead of running one attempt to
+a fixed budget, a second attempt and then the backup provider start at set boundaries inside
+one envelope, but only while every live attempt has gone silent; a turn that is visibly
+working is never hedged. With no winner, the outcome is the primary's own error, never
+whichever attempt finished last, so a hedge's failure cannot turn a retryable stall into a
+terminal one.
+
+A role on the direct Claude API is served by a pool of keys in a fixed order, with key health
+shared across processes. A rate-limited or revoked key is marked and the same request repeats
+on the next key; a pool with no healthy key hands the role to its subscription-backed
+fallback, which then meets its own spend caps and backup like any other call.
 
 That last clause is the design decision. The tempting alternative is to retry until
 something works, which converts a five-second failure into a two-minute hang and then
@@ -64,17 +80,20 @@ inventory note are independent facts; losing three because the fourth failed is 
 outcome than a partial day. Each route commits on its own, and a failed one is terminal for
 itself alone.
 
-The user is told, per route, rather than left to discover it: a failed effect ends
-`failed_terminal`, the response projector takes its failed branch with no committed receipt,
-and the reply says plainly that nothing was written for that fragment. Silence is the one
-unacceptable outcome.
+The user is told, per route, rather than left to discover it. A failed route gets its own
+slot in the reply, built without a model from three typed fields: what failed, whether
+resending would help, and what is known about that route's writes. That last field has three
+values, because "nothing" is not always the honest answer: `some` is a fact (a committed effect row
+cannot un-exist), `none` is only as strong as the claim transaction's snapshot, and `unknown`
+is reserved for a claim that itself failed. Saying "nothing was saved" when something was is
+worse than saying "unknown". Silence is the one unacceptable outcome.
 
 The harder failure is not a route that fails — it is a route that **succeeds wrongly**. A
 fragment routed to the wrong domain produces a perfectly valid record of the wrong kind, and
 nothing downstream can detect that, because every invariant it would violate belongs to the
 domain it was never sent to. There is no runtime mitigation. The defence is entirely
-upstream: the router carries by far the largest eval suite in the project — 92 of 341 cases
-— and a reply to a mis-routed record routes back to the right agent with full context, so a
+upstream: the router carries 138 of the project's 566 eval cases, a suite second only to
+FoodAgent's, and a reply to a mis-routed record routes back to the right agent with full context, so a
 correction costs one message rather than a manual edit.
 
 That asymmetry is why the router is the only agent forbidden to solve anything: every

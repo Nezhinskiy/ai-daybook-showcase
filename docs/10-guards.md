@@ -5,9 +5,12 @@
 A test proves a thing works. A guard proves a *class of thing* cannot silently stop working —
 and it is the only kind of check that survives the author forgetting why it was written.
 
-**18 guard test files, 4,600 lines. Six guard and generator scripts, 3,947 lines. Fifteen CI
-jobs across three workflows, every pull-request-blocking one path-filtered — asserted by a test
-rather than by convention. Six harness hooks.**
+**29 guard test files, 9,085 lines. Fifteen CI jobs across three workflows, every
+pull-request-blocking one path-filtered — asserted by a test rather than by convention. Three
+hooks registered by the repository itself.** The generic half of the tooling — the bug
+ledger, documentation budgets, the design trail, plan lint, commit attribution — moved out in
+October 2026 to `stayfixed`, a separately published harness CLI pinned at an exact version
+and hash; what stays in the tree is specific to this project.
 
 One rule organizes all of it: **a guard is added at the seam, not at the symptom**, and each
 one names the incident that created it. None of the guards below is speculative — every row
@@ -20,18 +23,23 @@ has a defect behind it.
 | **The model** | `capability_guard_rejection` | An action or effect tool outside the resolved plan | [chapter 02](02-agent-architecture.md) — the whole design |
 | | `resolved_plan_scope_mismatch` | A *plan* that arrived widened, before the guard above ever runs | The gap in plan-then-guard |
 | | decision / empty-actions guards | A decision that authorizes nothing being written as if it did | BR-027 |
-| | `KcalMacroGuard`, branded-lookup, explicit-unit, read guards | Domain-specific nonsense: impossible macros, a fabricated brand match, a unit the user never gave | One defect each |
+| | `KcalMacroGuard`, explicit-unit, read guards | Domain-specific nonsense: impossible macros, a unit the user never gave | One defect each |
 | | ownership guard (`require_owned`) | An effect tool touching a row that belongs to another user | Made shared so one fix covers every tool |
 | **The code** | workflow determinism (AST) | `asyncio.wait` inside Temporal workflow code | BR-064 |
 | | read-only surface snapshot | A view added to the analytical surface without a reviewed decision | The RLS policy would be silently invalid |
 | | analytical-SQL drift | The prompt documenting a view or function the validator rejects | Two live bugs at once |
-| | migration head | Two heads merging into an unrunnable chain | Parallel branches each adding a migration |
-| **The documents** | `check_documentation_hygiene.py` | An always-loaded index growing without limit; a link to a file that does not exist | [chapter 09](09-governance.md) |
-| | `bug_reports.py check` | An entry that does not parse, a stale index, a `BR-nnn` cited in code with no entry | The ledger split |
-| | `list_design_trail.py --check` | A generated design trail drifting from the documents it lists | A stale override silently marking unshipped work as delivered |
-| **Me** | `check_commit_attribution.py` | An AI or tool attribution trailer reaching history | A policy that is worthless if it depends on remembering |
-| | eval-scope `PreToolUse` hook | Spending a paid model run without scoping it first | The cost decision is made in the seconds before the command |
-| | `local_ci_checks.py --hook` | Pushing with a CI-blocking check stale | Discovering it from a red PR instead |
+| | migration head | Two heads merging into an unrunnable chain — checked on each pull request *and* again on `dev` after every merge | Two pull requests, each single-headed on its own merge ref, forking the graph once both landed |
+| | workflow-expression scan | A workflow file GitHub refuses to load, which runs zero jobs and reports nothing | BR-211: a broken `ci-cd.yml` leaves every later pull request with no checks at all, so the scan runs from a *different* workflow |
+| | self-hosted runner guard | A job that a pull request can trigger running on the runner that sits on the production machine | A computed `runs-on` once slipped past a substring check; computed labels now fail closed unless audited |
+| | `pyright` over `scripts/` | An undefined name in the hook layer | A half-written edit that made a hook exit 2 and broke every tool call on the machine |
+| **The documents** | `stayfixed docs check` | An always-loaded index growing without limit; a link to a file that does not exist | [chapter 09](09-governance.md) |
+| | `stayfixed bugs check` | An entry that does not parse, a stale index, a `BR-nnn` cited in code with no entry | The ledger split |
+| | `scripts/debt_ledger.py check` | A debt entry pointing at a moved file, or still waiting on blockers that have all closed | Debt harvested from PR bodies after the fact, instead of filed where it was found |
+| | `stayfixed docs trail --check` | A generated design trail drifting from the documents it lists | A stale override silently marking unshipped work as delivered |
+| **Me** | `stayfixed commit check` | An AI or tool attribution trailer reaching history | A policy that is worthless if it depends on remembering |
+| | eval-scope `PreToolUse` hook | An unscoped, over-wide, or production-pointed paid model run | An advisory version was read straight past, at real cost |
+| | `local_ci_checks.py --hook` | Pushing with a CI-blocking check stale; `git add` of a directory holding untracked files | A red PR found too late; a sibling session's work published by a directory add — twice in one session |
+| | hosted-fallback refusal | Pull-request CI silently billing hosted minutes because the local runner pool is offline | One day, 34 pull-request runs fell back to hosted runners: about 720 billed minutes |
 
 ## The one that reads best in full
 
@@ -93,21 +101,22 @@ Every pull-request-blocking job is gated on a path filter — `test_every_pr_blo
 is what keeps that true — so a documentation change does not run mypy and a frontend change
 does not run the Python suite. That is ordinary. What is not ordinary is the mirror.
 
-`scripts/local_ci_checks.py` is **1,074 lines**, and it reproduces CI's filters rather than
+`scripts/local_ci_checks.py` is **4,422 lines**, and it reproduces CI's filters rather than
 approximating them:
 
 - `--run` runs the CI-blocking checks, **skipping any whose inputs have not changed since they
   last passed and any this branch cannot reach** — and it *names both sets* rather than
   skipping silently. A check that vanishes without saying so is worse than one that runs.
-- `--changed` is the inner loop: only the tests reachable from what changed. It falls back to
-  the whole suite whenever it cannot reason — a non-Python file, a `conftest.py`, an unparsable
-  module — and **never records a pass**, because a static import graph cannot see a dynamic
-  import.
+- `--changed` is the inner loop: only the tests reachable from what changed — through the
+  import graph for Python, through the tests that name a document, workflow or script
+  otherwise. It falls back to the whole suite whenever it cannot reason — a `conftest.py`, an
+  unparsable module, a path no test names — and **never records a pass**, because a static
+  import graph cannot see a dynamic import.
 - The unit lane runs under a `DATABASE_URL` nothing listens on, because CI's unit job has no
   database and a test that quietly reaches the local one passes here and fails there.
 
-**And the mirror has its own guard: 53 tests, 1,746 lines**, pinning the local check list
-against CI's actual job and filter definitions. Two of them are the interesting ones.
+**And the mirror has its own guard: 264 tests, 8,688 lines** over the whole mirror script,
+including a pair that pins the local check list against CI's actual job and filter definitions. That pair is the interesting part.
 
 `test_every_ci_blocking_check_is_mirrored_locally` is the obvious direction. Its converse,
 `test_local_checks_do_not_invent_checks_ci_does_not_run`, is the one people forget: the
@@ -118,23 +127,32 @@ It lives in a separate policy tier with tests of its own asserting exactly that 
 A guard that overstates its own coverage is the failure mode this whole chapter is about, so
 the mirror is guarded against it in both directions.
 
+CI makes one narrower bet of its own. A pull request whose every changed file is a contract
+document, a hand-mirrored TypeScript source, an infra file or harness configuration runs only
+the tests that read those files, not the whole suite. A static selector is trusted there
+because it is audited: every full unit run records each file a test opens and fails if the
+selector's answer for that file would have left a reader out.
+
 ## Guards that fire when the decision is made, not when the code is written
 
 CI checks a change after it is written. Some decisions are made and paid for before that, and
-a guard placed at the wrong moment cannot help. Six hooks sit in the harness, and two are
-worth reading.
+a guard placed at the wrong moment cannot help. Three hooks are registered by the repository
+itself, and two are worth reading.
 
-**Before a paid model run.** A `PreToolUse` hook watches for `app.evals.gate` / `app.evals.run`
-and prints the scoping rule at the moment the command is about to launch — which cases the
-change can actually reach, which agents it provably cannot, and that a full run at a lower `k`
-*replaces* the stored artifact while `--case` only adds attempts. Documentation would have said
-the same thing, in a file read when someone goes looking for it, which is not this moment.
+**Before a paid model run.** A `PreToolUse` hook watches for the eval entry points
+(`app.evals.gate`, `app.evals.run`, `app.evals.probe`) at the moment the command is about to
+launch. It began as advice: it printed the scoping rule and **never denied**. Then a
+dispatched subagent read straight past that advice and ran a blanket `--agent <domain> --k 5`
+at real cost — so it now denies. It refuses a run that is unscoped, widened to several agents
+without a scope file, above the `k` cap of the entry point it names (counting the CLI's own
+default when the flag is absent — reading only the spelled-out flag once let the most
+expensive shape through), or pointed at a database it cannot prove is local.
 
-Its design is a lesson in restraint, stated in its own docstring: it fires only on a real
-invocation, **never denies**, and stays silent for the free structural modes and for a run
-already scoped to explicit cases — *because this repository already removed an always-on hook
-of the same kind for being noisy*. A guard that fires on ordinary work gets disabled, and then
-it protects nothing.
+What survived from the first version is the restraint, stated in its docstring: it fires only
+on a real invocation, and stays silent for the free structural modes and for a run already
+scoped to explicit cases against a local database — *because this repository already removed
+an always-on hook of the same kind for being noisy*. A guard that fires on ordinary work gets
+disabled, and then it protects nothing. Denying narrowly is not the same as denying often.
 
 **At session start.** An environment fingerprint reports lockfile drift, host load, and stale
 test-database DDL. It exists because three separate failures on one long run cost hours and
@@ -155,24 +173,30 @@ exits 0 whatever it finds.
 **Local convenience, authoritative gate.** A `prepare-commit-msg` hook strips attribution
 trailers before the message is even presented — chosen over `commit-msg` deliberately, because
 `git commit --no-verify` bypasses that one and not this one. It is still only convenience. The
-authoritative check is a CI workflow with its own trigger matrix, watching **every branch**
-rather than only pull requests, because the main pipeline restricts `push` to `main` — which
-would leave a commit pushed straight to `dev` with no run at all, and once it is there it sits
-below the base of every later PR range and is never revisited. A gate with that hole in it is
-not a gate.
+authoritative check runs in CI in two halves: one over every pull request's whole
+`base..head` range, including a hotfix based on `main`, and a separate workflow watching
+direct pushes to `dev` and `main`. The second half exists because the main pipeline
+restricts `push` to `main`, which would leave a commit pushed straight to `dev` with no run
+at all — and once it is there it sits below the base of every later pull-request range and
+is never revisited. It once watched every branch; feature-branch pushes were 237 of 281 push
+runs in a fortnight and pure duplication, since their commits cannot reach a permanent branch
+except through a checked pull request, so they were dropped. A test asserts both halves
+together, in both directions.
 
 ## Where the guards stop
 
 Every guard here has a list of what it does not catch, written down next to it rather than
 discovered later. The defect ledger's is eight items long. The sharpest is not about the tool at
 all — it is a gap in **CI's own path filters**: an identifier added under `scripts/`,
-`clients/`, `infra/` or the repository root reaches the local check but not the CI one, so it
-merges green and surfaces on somebody else's pull request. Cause, consequence and fix are
+`clients/`, `infra/`, `.github/`, `frontend/` or the repository root reaches the local check
+but not the CI one, so it merges green and surfaces on somebody else's pull request. Cause, consequence and fix are
 recorded; the fix is a path filter that has not been written yet.
 
-Documentation hygiene does not validate `#fragment` anchors. The commit-attribution patterns
-are calibrated against full history on pull requests only, because the unit suite runs on a
-depth-1 checkout where sweeping every ref inspects one commit and proves nothing.
+Documentation hygiene does not validate `#fragment` anchors. And moving the attribution check
+into the shared harness CLI narrowed what it refuses: it now judges only `-by:` trailers in
+the message's closing block, naming a known product or a vendor's own mail domain, so several
+forms the old in-repository script rejected now pass. That was accepted as a trade, and the list of forms that pass is written in
+the workflow beside the step rather than discovered later.
 
 Naming a blind spot costs one sentence. Leaving it unnamed converts it, eventually, into
 somebody's afternoon.

@@ -4,7 +4,7 @@ from app.agents.capability.expand import expand_intent
 from app.agents.capability.registry import action_by_kind
 from app.agents.capability.resolve import resolve_plan
 from app.agents.common.guard import capability_guard_rejection
-from app.agents.common.units import UNIVERSAL_ACTION_KINDS, AskUserAction
+from app.agents.common.units import UNIVERSAL_ACTIONS, AskUserAction
 from app.agents.inventory.note_actions import CreateTaskFromNoteActionOutput
 from app.contracts import PlannedToolCall
 from app.domain_values import Intent
@@ -74,18 +74,54 @@ def test_guard_scopes_cross_domain_note_to_task_by_bundle() -> None:
     assert capability_guard_rejection([decision], planned, with_capability) is None
 
 
-def test_universal_action_kinds_derived_from_flag() -> None:
-    # The guard's always-allowed set is derived from the ``universal`` flag on the
-    # Action object, not a hardcoded literal. ask_user is the canonical universal action.
-    assert AskUserAction.universal is True
-    assert set(UNIVERSAL_ACTION_KINDS) == {AskUserAction.kind}
+def test_guard_admits_exactly_the_plan_action_kinds() -> None:
+    # The plan is the one source of the action-kind allow-set: for every intent and media
+    # state, a registered kind passes the action-kind barrier exactly when the expanded plan
+    # carries it. A second allow-list beside the plan (the old universal-kind union) would
+    # admit a kind the plan left out.
+    for intent in Intent:
+        for has_media in (False, True):
+            plan = resolve_plan(expand_intent(intent, has_media=has_media))
+            for kind in action_by_kind():
+                rejection = capability_guard_rejection([_Action(kind)], [], plan)
+                if kind in plan.action_kinds:
+                    assert rejection is None, (intent, has_media, kind)
+                else:
+                    assert rejection == f"disallowed_action:{kind}", (intent, has_media, kind)
 
 
-def test_universal_action_kinds_match_registry() -> None:
-    # UNIVERSAL_ACTIONS in common/units.py is a hand-authored tuple: a new Action
-    # with universal=True that is not added there would silently miss the guard's
-    # allow-set. The derived registry is the other source of truth, so pin both
-    # directions of drift: every universal-flagged action reachable through the
-    # object graph is in UNIVERSAL_ACTION_KINDS, and nothing else is.
-    registry_universal = {kind for kind, action in action_by_kind().items() if action.universal}
-    assert registry_universal == set(UNIVERSAL_ACTION_KINDS)
+def test_opted_out_bundles_reject_ask_user_at_the_action_kind_barrier() -> None:
+    # The raw-events recorder and analyzer opt out of the universal actions, so ask_user is
+    # rejected as an action kind, before any effect tool is looked at.
+    assert [action.kind for action in UNIVERSAL_ACTIONS] == [AskUserAction.kind]
+    for intent in (Intent.RAW_EVENT_LOG, Intent.RAW_EVENT_ANALYSIS):
+        for has_media in (False, True):
+            plan = resolve_plan(expand_intent(intent, has_media=has_media))
+            rejection = capability_guard_rejection(
+                [_Action(AskUserAction.kind)],
+                [PlannedToolCall(tool_name="ask_user", input={})],
+                plan,
+                allow_empty=True,
+            )
+            assert rejection == "disallowed_action:ask_user", (intent, has_media)
+
+
+def test_registry_indexes_the_universal_actions() -> None:
+    # No bundle lists a universal action, so the registry must reach them itself, or
+    # resolve_plan's kind lookup fails on every plan that carries one.
+    for action in UNIVERSAL_ACTIONS:
+        assert action_by_kind()[action.kind] is action
+
+
+def test_guard_rejects_an_action_object_that_has_no_kind() -> None:
+    """A decision object without a string `kind` is rejected, never raised through.
+
+    The guard takes `Sequence[object]` precisely so this stays a rejection code: it is the
+    fail-closed boundary between a model's decision and the effect layer, so a shape it
+    cannot read must produce `disallowed_action`, not an AttributeError that escapes into
+    the caller's error path.
+    """
+    plan = resolve_plan(expand_intent(Intent.FOOD_LOG, has_media=False))
+
+    assert capability_guard_rejection([object()], [], plan) == "disallowed_action:None"
+    assert capability_guard_rejection([_Action(1)], [], plan) == "disallowed_action:1"  # type: ignore[arg-type]

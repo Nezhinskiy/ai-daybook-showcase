@@ -38,7 +38,7 @@ does — [chapter 01](docs/01-product.md).
 |---|---|---|
 | **One LLM decision per request, pre-scoped.** An intent expands into a `CapabilityPlan` by pure code; an out-of-bundle call is `FAILED_TERMINAL` with no partial writes — checked against the *plan*, so "no partial writes" is structural rather than a rollback. | [chapter 02](docs/02-agent-architecture.md) | [the guard, exercised](docs/EVIDENCE.md#3-the-guard-exercised) |
 | **An LLM writes free-form SQL against production, safely.** `sqlglot` AST validation, a role holding no write grant, and Postgres row-level security. Defeating any one of the three buys nothing. | [chapter 04](docs/04-security.md) | [the validator, exercised](docs/EVIDENCE.md#5-the-sql-validator-exercised) |
-| **341 eval cases, 57 deterministic evaluators, no judge model, threshold 1.0, no retries.** A flaky case is a defect to root-cause, never something to retry past. | [chapter 06](docs/06-quality.md) | [a defect the evals could not see](docs/EVIDENCE.md#6-a-production-defect-the-eval-suite-could-not-see) |
+| **566 eval cases, 68 deterministic evaluators, no judge model, no retries.** The standard is k=5 with every attempt of every case passing; a flaky case is a defect to root-cause, never something to retry past. At this pin the current runs are a k=1 screen, not that gate, and the evidence page says so. | [chapter 06](docs/06-quality.md) | [a defect the evals could not see](docs/EVIDENCE.md#6-a-production-defect-the-eval-suite-could-not-see) · [what is current](docs/EVIDENCE.md#9-the-current-strict-gate) |
 
 ## Provenance
 
@@ -47,23 +47,24 @@ is see which command produced each figure, at one pinned commit, and hold the tw
 other:
 
 ```console
-$ python -m pytest -m "not integration" -n 8 -q
-8434 passed, 3 skipped in 83.86s (0:01:23)
+$ python3 scripts/pytest_in_tree.py -m "not integration" -n 8 -q -p no:cacheprovider
+17581 passed, 3 skipped in 595.99s (0:09:55)
 
 $ git ls-files tests | grep '\.py$' | tr '\n' '\0' \
     | xargs -0 grep -hoE '^[[:space:]]*(async )?def test_' | wc -l
-    8146
+   15186
 ```
 
-<sub>Two different things: 8,146 test *functions* in tracked files, 8,434 test *items* pytest
-collects after parametrization in the lane that excludes the Postgres and Temporal tiers.</sub>
+<sub>Two different things: 15,186 test *functions* in tracked files, 17,581 test *items* pytest
+collects after parametrization in the lane that excludes the Postgres and Temporal tiers. The
+run shared a loaded machine, so its wall time says nothing about the suite's speed.</sub>
 
 [**docs/EVIDENCE.md**](docs/EVIDENCE.md) carries the rest as raw output: every count with its
 command, one request traced from intent to written row, the guard and the SQL validator
-rejecting real input, four defects unabridged, and what the system actually does in
-production.
+rejecting real input, four defects unabridged, and what the system did in production when
+last read.
 
-[**code/**](code/) is the capability kernel itself — 1,072 lines of source and 1,268 of tests,
+[**code/**](code/) is the capability kernel itself — 1,270 lines of source and 2,240 of tests,
 copied verbatim, readable in twenty minutes.
 
 ## Read on
@@ -91,10 +92,10 @@ codebase honest rather than the person who designs the agent loop.
 
 | Layer | Choice |
 |---|---|
-| Language | Python 3.13, strictly typed (`mypy --strict` + `pyright`, over source *and* tests) |
+| Language | Python 3.13, typed throughout (mypy with every function annotated, plus `pyright`, over source *and* tests) |
 | Durable execution | [Temporal](https://temporal.io) |
 | Agents | [LangGraph](https://github.com/langchain-ai/langgraph) + [PydanticAI](https://ai.pydantic.dev), inside Temporal activities |
-| LLM providers | Subscription-backed Claude via `claude_cli`, with multi-provider failover |
+| LLM providers | The Claude API through a pool of keys, with subscription-backed Claude via `claude_cli` as each role's fallback, and a backup provider on failure |
 | API & admin | FastAPI, SQLAdmin |
 | Persistence | PostgreSQL, async SQLAlchemy 2.0, Alembic |
 | SQL guard | [`sqlglot`](https://github.com/tobymao/sqlglot) + Postgres row-level security |
@@ -115,5 +116,6 @@ published for reading and no license to use them is granted. All rights reserved
 
 ---
 
-<sub>Snapshot of commit `85d65d2d`, 2026-08-17. The private repository has moved on since;
-figures here are not updated continuously.</sub>
+<sub>Snapshot of commit `4fc9ea5e`, 2026-10-26; the production figures are from an earlier read,
+on 2026-08-17. The private repository has moved on since; figures here are not updated
+continuously.</sub>

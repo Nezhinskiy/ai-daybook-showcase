@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
+from functools import cache
+from types import MappingProxyType
 from typing import Any
 
 from app.agents.capability.model import Action, Capability, IntentBundle, SkillFragment
 from app.agents.common.context_blocks import ContextBlockSpec
-from app.agents.common.read_tools import ReadToolSpec
+from app.agents.common.read_tools import ReadToolSpec, query_contract_violation
+from app.agents.common.units import UNIVERSAL_ACTIONS, ConversationCapability
 from app.domain_values import TOOL_NAMES, DomainAgentName, Intent, domain_of_intent
 
 
@@ -23,6 +26,8 @@ def _all_actions(extra_capabilities: tuple[Capability, ...] = ()) -> list[Action
         out.extend(cap.actions)
     for bundle in INTENT_BUNDLES.values():
         out.extend(bundle.intent_write_actions)
+    # No bundle lists the universal actions, so the registry reaches them here.
+    out.extend(UNIVERSAL_ACTIONS)
     return out
 
 
@@ -67,24 +72,42 @@ def _index[T](items: Iterable[T], key: Callable[[T], str]) -> dict[str, T]:
     return out
 
 
-def capability_by_name() -> dict[str, Capability]:
-    return _index(_all_capabilities(), lambda capability: capability.name)
+def _shared_index[T](items: Iterable[T], key: Callable[[T], str]) -> Mapping[str, T]:
+    """Publish one read-only index of a derived registry.
+
+    These five accessors are looked up per name inside `resolve_plan`'s comprehensions, so a
+    per-call rebuild walked every capability and intent bundle once per plan element on the
+    request path. The object graph is complete at import — `INTENT_BUNDLES` is a module
+    constant and `assert_registry_consistent()` runs below it — so the index can be built
+    once and shared. It is published read-only because a shared mutable dict would let one
+    caller's write reach every other reader.
+    """
+    return MappingProxyType(_index(items, key))
 
 
-def read_tool_by_name() -> dict[str, ReadToolSpec]:
-    return _index(_all_read_tools(), lambda read_tool: read_tool.name)
+@cache
+def capability_by_name() -> Mapping[str, Capability]:
+    return _shared_index(_all_capabilities(), lambda capability: capability.name)
 
 
-def context_block_by_name() -> dict[str, ContextBlockSpec]:
-    return _index(_all_context_blocks(), lambda context_block: context_block.name)
+@cache
+def read_tool_by_name() -> Mapping[str, ReadToolSpec]:
+    return _shared_index(_all_read_tools(), lambda read_tool: read_tool.name)
 
 
-def action_by_kind() -> dict[str, Action[Any]]:
-    return _index(_all_actions(), lambda action: action.kind)
+@cache
+def context_block_by_name() -> Mapping[str, ContextBlockSpec]:
+    return _shared_index(_all_context_blocks(), lambda context_block: context_block.name)
 
 
-def skill_fragment_by_name() -> dict[str, SkillFragment]:
-    return _index(_all_skill_fragments(), lambda skill_fragment: skill_fragment.name)
+@cache
+def action_by_kind() -> Mapping[str, Action[Any]]:
+    return _shared_index(_all_actions(), lambda action: action.kind)
+
+
+@cache
+def skill_fragment_by_name() -> Mapping[str, SkillFragment]:
+    return _shared_index(_all_skill_fragments(), lambda skill_fragment: skill_fragment.name)
 
 
 def read_domains_of_intent(intent: Intent) -> frozenset[DomainAgentName]:
@@ -132,10 +155,6 @@ def _require_conversational_core(bundles: Mapping[Intent, IntentBundle]) -> None
     Memory and Vision are opt-in tiers (profile_update and inventory_delete carry neither;
     query bundles carry no Vision), so only Conversation is enforced.
     """
-    # Function-local import to keep registry's module-level import surface minimal —
-    # registry does not import common.units today, and this keeps it that way.
-    from app.agents.common.units import ConversationCapability
-
     for intent, bundle in bundles.items():
         if not any(capability is ConversationCapability for capability in bundle.capabilities):
             raise AssertionError(f"intent bundle {intent!r} missing ConversationCapability")
@@ -174,6 +193,11 @@ def assert_registry_consistent(
     for read_tool in _all_read_tools(extra_capabilities):
         if read_tool.name not in TOOL_NAMES and read_tool.name not in _non_db_read_tools:
             raise AssertionError(f"unknown read tool name: {read_tool.name!r}")
+        # A declared query contract is only worth what its argument surface makes reachable;
+        # the spec owns the rule, this loop is just where every registered spec meets it.
+        violation = query_contract_violation(read_tool)
+        if violation is not None:
+            raise AssertionError(violation)
 
     for intent, bundle in INTENT_BUNDLES.items():
         expected_agent = domain_of_intent(intent)
@@ -186,7 +210,10 @@ def assert_registry_consistent(
     _require_conversational_core(INTENT_BUNDLES)
 
 
-INTENT_BUNDLES: dict[Intent, IntentBundle] = _load_intent_bundles()
+# Read-only for the same reason the derived indexes are: the accessors below cache what
+# they build from it, so a post-import mutation would reach some readers and not others.
+# Callers that need a variant build their own `dict(INTENT_BUNDLES)`.
+INTENT_BUNDLES: Mapping[Intent, IntentBundle] = MappingProxyType(_load_intent_bundles())
 
 
 assert_registry_consistent()

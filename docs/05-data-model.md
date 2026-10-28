@@ -27,6 +27,22 @@ Clearing a value is its own explicit channel rather than a null slipping through
 string is rejected instead of being normalized into a clear, because "I meant to erase this"
 and "the model omitted a field" must not look identical to the database.
 
+The rule holds when one correction fans out. Fixing a saved product's nutrition in the Mini
+App can optionally restate the past meals and cooked dishes that used it; a durable workflow
+rewrites them one transaction each, every rewrite with its own `change_log` row, and it
+restates only items whose product still reads as the edit left it, so a later edit or a
+typed correction is never overwritten by an older run. Merging two saved products moves their
+history to the survivor without changing a single past number, and each relabelled item
+records why in its own usage chain, which is what lets a detach give the history back.
+
+## Products and their forms
+
+Food's catalogue is per user. A saved product is one row; each labelled form of it (name,
+brand, package, shops, product codes, nutrition) is a row of its own, so a product bought in
+two sizes or two shops is one product with two forms rather than two products that drift
+apart. Which saved product a meal item used is recorded as a binding with its evidence and a
+trust level, not inferred later from a name.
+
 ## Episodes carry evidence and confidence
 
 Automated signals — screen time, Wi-Fi places, movement, workouts — arrive as raw events.
@@ -40,10 +56,24 @@ with a black box.
 
 ## Multi-tenancy is a schema property
 
-Every row carries `user_id` directly. Not a foreign-key path to a parent that carries it —
-directly, including junction tables, because row-level security policies must be
-expressible on the table itself. That house rule exists because the alternative silently
-produces tables the policy cannot protect; see [chapter 04](04-security.md).
+Every user-owned table carries `user_id`, and every table behind the analytical read surface
+carries it directly. Not a foreign-key path to a parent that carries it — directly, including
+junction tables, because row-level security policies must be expressible on the table
+itself. Some write-side children still reach their user through a parent (memory audiences,
+inventory collection links, conversation turn revisions); the rule is that such a table gains
+its own `user_id` before it becomes readable, because the alternative silently produces
+tables the policy cannot protect; see [chapter 04](04-security.md).
+
+## Destructive changes are expand, then contract
+
+Moving food quantities from grams-only to native grams and millilitres took several
+releases, not one. The new storage was added beside the old, the new writer ran in production on the
+expanded schema through a soak window, and only then did a single, manually approved run
+drop the legacy columns. That run verified the image, schema revision and backup before the
+DDL and wrote an append-once receipt in the same transaction; the application's startup
+gate now reads that receipt rather than any configuration flag. Historical effect payloads
+still speak the old shapes, so their decoders are kept permanently: a contraction removes
+columns, never the ability to read what was written before it.
 
 ## Typed contracts at every boundary
 
@@ -54,9 +84,9 @@ import time, because a forward reference resolved lazily breaks replay.
 
 ## Scale
 
-**97 reviewed migrations** across fourteen domains. The schema's shape is set by two rules
-rather than by the domain count: every row carries `user_id` directly, and nothing is
-overwritten.
+**143 reviewed migrations** across fourteen domains. The schema's shape is set by two rules
+rather than by the domain count: on the read surface user scope is a column rather than a
+join, and nothing is overwritten.
 
 ---
 
