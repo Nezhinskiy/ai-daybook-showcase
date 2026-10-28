@@ -3,9 +3,8 @@
 [← back to the overview](../README.md)
 
 Output, not description. Every block below is something a command printed, pasted verbatim.
-Measured at commit `4fc9ea5e`, 2026-10-26, on a clean tree. One section is older:
-[§8](#8-production) was read from the production database on 2026-08-17 and was not re-read
-at this pin.
+Measured at commit `4fc9ea5e`, 2026-10-26, on a clean tree; [§8](#8-production) was read
+from the production database two days later, on 2026-10-28.
 
 **Contents** — [counts](#1-the-counts-and-the-commands-that-produced-them) ·
 [one request end to end](#2-one-request-end-to-end) ·
@@ -193,8 +192,8 @@ reach them if it names them anyway.
 `PlannedToolCall(tool_name, input)` — which is what §3 checks. A surviving call dispatches to
 the typed effect tool, which validates its input against a Pydantic contract, **forces
 `user_id` from the request scope rather than accepting it from the model**, writes, and
-records a `change_log` entry on any update. 836 such calls had executed in production by the
-2026-08-17 read in [§8](#8-production).
+records a `change_log` entry on any update. 1,221 such calls had executed in production by the
+2026-10-28 read in [§8](#8-production).
 
 One real decision payload appears in [§8](#8-production) — captured from the trace that
 became BR-027. Full inbound-to-row captures are not published here, because a real trace
@@ -497,57 +496,79 @@ carries that correction above the technique it corrects.
 
 ## 8. Production
 
-Small numbers, stated as they are. This is a personal system, not a product with traction;
-at the pinned commit, production has one live user, its owner.
+Small numbers, stated as they are. This is a personal system, not a product with traction.
 
-**Read from the production database on 2026-08-17; not re-read at this pin.** Window
-2026-06-19 → 2026-08-16. Every production figure in this section, and in
-[chapter 07](07-operations.md#what-it-actually-does-measured), is from that read.
+**Read from the production database on 2026-10-28.** Window 2026-06-19 → 2026-10-27, with the
+ten weeks since the previous read (2026-08-17 → 2026-10-27) shown on their own. Run over the
+previous read's window, the same queries reproduce every figure it published, so the
+definitions below are the ones it used: a day is a UTC date of an inbound message, sustained
+means at least five such days, and every count is over `created_at`.
 
-| | |
-|---|---|
-| Registered users / who ever messaged / sustained (≥5 active days) | 14 / 13 / **4** |
-| Active days | 51 |
-| Inbound messages | 538 |
-| Agent runs | 592 — 545 succeeded, 30 needs-user, 17 terminal (6 guard, 1 decision timeout, 1 read-tool cap, 1 materialization failure, 1 backfilled orphan, 7 with no error recorded) |
-| Effect-tool calls | 836 |
-| Records written | 317 meals · 259 activities · 210 episodes · 225 audited corrections |
-| Automated raw events ingested | 2,670 |
+| | Whole window | Since 2026-08-17 |
+|---|---|---|
+| Registered users / who messaged / sustained (≥5 active days) | 20 / 19 / **5** | 20 / 9 / **2** |
+| Active days | 99 | 48 |
+| Inbound messages | 730 | 192 |
+| Agent runs | 945 — 862 succeeded, 52 needs-user, 31 terminal | 353 — 317 succeeded, 22 needs-user, 14 terminal |
+| Effect-tool calls | 1,221 | 385 |
+| Records written | 371 meals · 505 activities · 422 episodes · 24 tasks | 54 meals · 246 activities · 212 episodes · 11 tasks |
+| Audited corrections (`change_log`) | 460 | 235 |
+| Automated raw events ingested | 7,787 | 5,117 |
 
-Reply latency, inbound message to first sent reply:
+The recent column is close to one account. Of the nine that wrote since 2026-08-17, one was
+active on 40 of the 48 days, one on five, and the other seven on three days or fewer; every raw
+event and every episode in that period belongs to a single account. The terminal runs break
+down as 6 guard rejections, 3 decision timeouts, 3 materialization failures, 1 read-tool cap,
+and 18 whose output carries no error code, one of them the backfilled orphan below; ten of
+those 18 fall in the recent period.
+
+Reply latency, inbound message to the first reply sent for it:
 
 ```console
-n    384
-p50  16.0 s
-p90  57.3 s
-p95  79.9 s
+$ with first_reply as (
+    select i.id, i.created_at, min(o.sent_at) sent
+      from inbound_messages i join outbound_messages o on o.inbound_message_id = i.id
+     where i.created_at >= :lo and i.created_at < :hi and o.sent_at is not null
+     group by 1, 2)
+  select count(*), percentile_cont(0.5 | 0.9 | 0.95) within group
+         (order by extract(epoch from sent - created_at)) from first_reply;
+
+                 2026-06-19 → 2026-10-27    2026-08-17 → 2026-10-27
+n                576                        192
+p50              19.2 s                     22.9 s
+p90              57.8 s                     64.2 s
+p95              82.1 s                     104.2 s
 ```
 
-Slow, and known why: at the time of the read the interactive path ran on a subscription-backed
-CLI provider chosen for cost, not latency, and a mixed message pays for a router decision plus
-one decision per domain, sequentially. Production has since moved its decision roles to the
-metered Claude API key pool ([chapter 07](07-operations.md#cost-control)); latency has not been
-re-measured for this page since. [Chapter 07](07-operations.md#what-it-actually-does-measured) carries
-what would fix it and why it has not been prioritized for a logging tool.
+Slower than at the previous read (p50 16.0 s over n=384), not faster. Nearly all of this window
+ran on the subscription-backed CLI provider chosen for cost, not latency; the decision roles
+moved to the metered Claude API key pool ([chapter 07](07-operations.md#cost-control)) only in
+its final days, so these figures say nothing about that change yet. A mixed message still pays
+for a router decision plus one decision per domain, sequentially.
+[Chapter 07](07-operations.md#what-it-actually-does-measured) carries what would fix it and why
+it has not been prioritized for a logging tool.
 
 **How often the guard fires**, split by which barrier. This groups on the structured fields
 rather than searching the JSON as text, so the zero below is "no row carries that reason", not
-"the substring did not appear":
+"the substring did not appear". Output as `psql -At` printed it; the doubled "turn" is in the
+stored reason:
 
 ```console
 $ select coalesce(output->>'error','(none)'), coalesce(output->>'reason','(none)'), count(*)
-    from agent_runs group by 1,2 order by 3 desc;
+    from agent_runs where created_at < '2026-10-28' group by 1,2 order by 3 desc;
 
-(none)                         | (none)                                       | 583
-capability_guard_rejected      | empty_actions                                |   6
-decision_timeout               | turn exceeded its 180s budget                |   1
-decision_materialization_failed| lower_priority_source_selected               |   1
-tool_rounds_exceeded           | read-tool invocation cap exceeded during turn |   1
+(none)|(none)|932
+capability_guard_rejected|empty_actions|6
+decision_timeout|turn turn exceeded its 180s budget|3
+decision_materialization_failed|lower_priority_source_selected|1
+decision_materialization_failed|mismatched_attachment|1
+decision_materialization_failed|unresolved_observation_handle|1
+tool_rounds_exceeded|read-tool invocation cap exceeded during turn|1
 ```
 
 Every `capability_guard_rejected` row carries `empty_actions`. `disallowed_action` and
 `disallowed_effect_tool` — the two **scope** barriers — appear on no row at all: zero out of
-592. The **empty-plan** barrier fired six times, five on FoodAgent and one on ActivityAgent,
+945. The **empty-plan** barrier fired six times, five on FoodAgent and one on ActivityAgent,
 none since 2026-07-15.
 
 What that query does and does not establish: it is exhaustive over `agent_runs`, so no

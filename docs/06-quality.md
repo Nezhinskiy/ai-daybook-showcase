@@ -171,8 +171,8 @@ against data written under the wider constraint.
 ## How these were counted
 
 Every figure in this repository comes from a command run at one pinned commit, `4fc9ea5e`,
-with one exception: the production read in [evidence §8](EVIDENCE.md#8-production), taken on
-2026-08-17 and not repeated. The commands and their raw output are on the
+except the production figures in [evidence §8](EVIDENCE.md#8-production), read two days
+later, on 2026-10-28. The commands and their raw output are on the
 [evidence page](EVIDENCE.md#1-the-counts-and-the-commands-that-produced-them):
 
 | Metric | Value | Command |

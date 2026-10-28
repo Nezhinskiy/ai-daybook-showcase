@@ -61,8 +61,8 @@ run shared a loaded machine, so its wall time says nothing about the suite's spe
 
 [**docs/EVIDENCE.md**](docs/EVIDENCE.md) carries the rest as raw output: every count with its
 command, one request traced from intent to written row, the guard and the SQL validator
-rejecting real input, four defects unabridged, and what the system did in production when
-last read.
+rejecting real input, four defects unabridged, and what the system actually does in
+production.
 
 [**code/**](code/) is the capability kernel itself — 1,270 lines of source and 2,240 of tests,
 copied verbatim, readable in twenty minutes.
@@ -116,6 +116,5 @@ published for reading and no license to use them is granted. All rights reserved
 
 ---
 
-<sub>Snapshot of commit `4fc9ea5e`, 2026-10-26; the production figures are from an earlier read,
-on 2026-08-17. The private repository has moved on since; figures here are not updated
-continuously.</sub>
+<sub>Snapshot of commit `4fc9ea5e`, 2026-10-26; production figures read on 2026-10-28. The
+private repository has moved on since; figures here are not updated continuously.</sub>

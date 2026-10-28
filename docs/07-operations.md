@@ -8,48 +8,51 @@ absorbed by redundancy.
 
 ## What it actually does, measured
 
-Read from the production database on 2026-08-17. Small numbers, stated precisely — a
+Read from the production database on 2026-10-28. Small numbers, stated precisely — a
 portfolio that says "a group of beta users" is hiding something, and the interesting claims
 here do not depend on scale. Queries and raw output: [evidence
 §8](EVIDENCE.md#8-production).
 
 | | |
 |---|---|
-| Users | 14 registered · 13 have sent a message · **4 sustained** (≥5 active days) |
-| Period | 2026-06-19 → 2026-08-16, **51 active days** |
-| Messages processed | **538** inbound |
-| Agent runs | **592** — 545 succeeded, 30 needs-user, 17 terminal (6 guard, 3 other errors, 1 backfill, 7 unattributed) |
-| Effect-tool calls | **836** |
-| Records written | 317 meals · 259 activities · 210 episodes · 13 tasks |
-| Automated capture | **2,670 raw events → 210 episodes** — a 12.7:1 collapse, all evidence-backed |
-| Corrections | **225** `change_log` entries against 317 meals |
-| End-to-end reply latency | **p50 16.0 s · p90 57.3 s · p95 79.9 s** (n=384, inbound → reply sent) |
-| Capability-guard rejections | **6** — all `empty_actions`; **0** out-of-bundle |
+| Users | 20 registered · 19 have sent a message · **5 sustained** (≥5 active days); since 2026-08-17, 9 wrote and 2 sustained |
+| Period | 2026-06-19 → 2026-10-27, **99 active days** |
+| Messages processed | **730** inbound |
+| Agent runs | **945** — 862 succeeded, 52 needs-user, 31 terminal (6 guard, 7 other errors, 18 with no error code) |
+| Effect-tool calls | **1,221** |
+| Records written | 371 meals · 505 activities · 422 episodes · 24 tasks |
+| Automated capture | **7,787 raw events → 422 episodes** — an 18.5:1 collapse, every episode citing the raw events behind it |
+| Corrections | **460** audited `change_log` entries — 227 on saved products' nutrition, 45 on meals |
+| End-to-end reply latency | **p50 19.2 s · p90 57.8 s · p95 82.1 s** (n=576, inbound → first reply sent); p50 22.9 s since 2026-08-17 |
+| Capability-guard rejections | **6** — all `empty_actions`, none since 2026-07-15; **0** out-of-bundle |
 
 Three of those deserve comment rather than celebration.
 
-**The latency is the honest weak point.** Fifteen seconds to a median reply is slow for
-something that feels like a chat. The cause is structural and known: the router is on the
+**The latency is the honest weak point.** Nineteen seconds to a median reply, and
+twenty-three over the last ten weeks, is slow for something that feels like a chat. The cause is structural and known: the router is on the
 critical path for *every* message, so the floor is two sequential model calls plus tool
 execution before a word comes back. That is precisely the cost
 [deterministic evidence orchestration](11-roadmap.md#direction) is designed to remove — the
 roadmap item exists because of this number, not the other way round.
 
-**The correction rate is the encouraging one.** 225 corrections against 317 meals means
-users routinely fix what the estimate got wrong, which is exactly the intended loop: log
-imprecisely and instantly, refine later. A low correction count would have meant the audit
-trail was decoration.
+**The corrections are not where the previous revision of this page put them.** It read 225
+`change_log` entries against 317 meals as users fixing meal estimates. Grouped by entity, only
+31 of those 225 touched a meal; today 45 of 460 do. The largest share, 227, edits the nutrition
+of a saved product, and the rest spread over inventory, profile, screen-category rules and
+recipe batches. The intended loop holds, log imprecisely and refine later, but the refinement
+mostly lands on the reusable product rather than on one meal. The earlier sentence compared a
+total with the wrong denominator; it is corrected here rather than quietly replaced.
 
 **The guard's rejections split unevenly, and the split is the interesting part.** The
 out-of-bundle barriers — an action or an effect tool outside the plan — have fired **zero**
-times in 592 runs. The empty-plan barrier fired **six**, none since 2026-07-15, and the last
+times in 945 runs. The empty-plan barrier fired **six**, none since 2026-07-15, and the last
 of them is the trace recorded as BR-027: a model that answered a user's counter-question
 helpfully, in prose, with no action to carry it. The guard was right about the shape and the
 schema was wrong about what a decision could be; the fix routed a question-shaped
 message-only decision onto `ask_user` rather than relaxing the barrier. [Full trace and
 numbers](EVIDENCE.md#8-production).
 
-Zero on the scope barriers, three months in, means production traffic is not what validates
+Zero on the scope barriers, four months in, means production traffic is not what validates
 them. Their correctness rests on unit tests and a 58-entry snapshot corpus over every
 intent's expanded bundle, which is why [chapter 06](06-quality.md) names those rather than
 leaving them implicit.
