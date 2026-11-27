@@ -28,9 +28,11 @@ router ▸ 4 fragments · 4 domains · dispatched concurrently
    📦 InventoryAgent  whey protein → running low      → inventory
 ```
 
-Four typed, audited, user-scoped database writes. No forms, no follow-up interrogation. It is
-built for people with ADHD or autism, which is the reason the architecture looks the way it
-does — [chapter 01](docs/01-product.md).
+That trace illustrates the routing; it is not a recorded run.
+[Evidence §2](docs/EVIDENCE.md#2-one-request-end-to-end) follows one request, a forwarded
+calendar invite, with the recorded output of the code that scopes it. No forms, no follow-up
+interrogation. It is built for people with ADHD or autism, which is the reason the architecture
+looks the way it does — [chapter 01](docs/01-product.md).
 
 ## Three claims, each with its proof
 
